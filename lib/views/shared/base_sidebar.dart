@@ -5,10 +5,10 @@ import 'package:kimpos/viewmodels/profile_viewmodel.dart';
 import 'package:kimpos/views/dashboard/dashboard_screen.dart';
 import 'package:kimpos/views/pengaturan/pengaturan.dart';
 
-
 import '../../viewmodels/plan_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/theme_notifier.dart';
+import '../../viewmodels/kelola_produk_viewmodel.dart';
 
 import '../auth/login_screen.dart';
 import '../kasir/kasir_screen.dart';
@@ -17,7 +17,6 @@ import '../transaksi/transaksi.dart';
 import '../user/user_screen.dart';
 import '../laporan/laporan.dart';
 import '../log/log_aktivitas.dart';
-
 
 class BaseSidebar extends ConsumerStatefulWidget {
   final String role; // owner | admin | kasir
@@ -35,27 +34,23 @@ class _BaseSidebarState extends ConsumerState<BaseSidebar> {
   late List<IconData> icons;
   late List<Widget> pages;
 
- @override
-void initState() {
-  super.initState();
-  _setupMenu();
+  @override
+  void initState() {
+    super.initState();
+    _setupMenu();
 
-  // 🔥 AMBIL STORE PROFILE SEKALI
-  Future.microtask(() {
-    final profileVM = ref.read(profileViewModelProvider.notifier);
-    if (profileVM.state.store == null) {
-      profileVM.fetchProfile();
-    }
-  });
+    /// 🔥 WAJIB: FETCH STORE SETIAP LOGIN
+    Future.microtask(() {
+      ref.read(profileViewModelProvider.notifier).fetchProfile();
+    });
 
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.black,
-      statusBarIconBrightness: Brightness.light,
-    ),
-  );
-}
-
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.black,
+        statusBarIconBrightness: Brightness.light,
+      ),
+    );
+  }
 
   void _setupMenu() {
     if (widget.role == 'owner') {
@@ -80,7 +75,7 @@ void initState() {
         Icons.logout,
       ];
       pages = [
-        const DashboardScreen(), // ✅
+        const DashboardScreen(),
         const ProdukScreen(),
         const TransaksiScreen(),
         const UserScreen(),
@@ -92,7 +87,6 @@ void initState() {
     } else if (widget.role == 'admin') {
       titles = [
         'Beranda',
-      
         'Produk',
         'Transaksi',
         'Karyawan',
@@ -103,7 +97,6 @@ void initState() {
       ];
       icons = [
         Icons.home,
-      
         Icons.inventory,
         Icons.receipt_long,
         Icons.people,
@@ -113,8 +106,7 @@ void initState() {
         Icons.logout,
       ];
       pages = [
-        const DashboardScreen(), // ✅
-      
+        const DashboardScreen(),
         const ProdukScreen(),
         const TransaksiScreen(),
         const UserScreen(),
@@ -132,28 +124,39 @@ void initState() {
         Icons.logout,
       ];
       pages = [
-        const DashboardScreen(), // ✅
+        const DashboardScreen(),
         const KasirScreen(),
         const ProdukScreen(),
-   
         const SizedBox(),
       ];
     }
   }
 
-  void _onTap(int index) {
-    if (titles[index] == 'Logout') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-      );
-      return;
-    }
-    setState(() {
-      selectedIndex = index;
-      isSidebarOpen = false;
-    });
+  
+void _onTap(int index) {
+  if (titles[index] == 'Logout') {
+    /// ================= RESET STATE =================
+    ref.read(authViewModelProvider.notifier).logout();
+
+    // 🔥 RESET CACHE PROVIDER
+    ref.invalidate(profileViewModelProvider);
+    ref.invalidate(planNotifierProvider);
+    ref.invalidate(kelolaProdukViewModelProvider);
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+    return;
   }
+
+  setState(() {
+    selectedIndex = index;
+    isSidebarOpen = false;
+  });
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -161,10 +164,8 @@ void initState() {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-
       body: Stack(
         children: [
-          // ================= BODY =================
           Column(
             children: [
               Container(
@@ -189,10 +190,8 @@ void initState() {
                       children: [
                         Consumer(
                           builder: (context, ref, _) {
-                            final store = ref
-                                .watch(profileViewModelProvider)
-                                .store;
-
+                            final store =
+                                ref.watch(profileViewModelProvider).store;
                             return Text(
                               store?.name ?? 'PIPOS',
                               maxLines: 1,
@@ -205,7 +204,6 @@ void initState() {
                             );
                           },
                         ),
-
                         Text(
                           titles[selectedIndex],
                           style: const TextStyle(
@@ -222,7 +220,7 @@ void initState() {
             ],
           ),
 
-          // ================= SIDEBAR =================
+          /// ================= SIDEBAR =================
           if (isSidebarOpen)
             Positioned.fill(
               child: GestureDetector(
@@ -238,14 +236,12 @@ void initState() {
                         children: [
                           const SizedBox(height: 32),
 
-                          // ===== HEADER =====
+                          /// ===== HEADER =====
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               ClipRRect(
-                                borderRadius: BorderRadius.circular(
-                                  50,
-                                ), // makin besar makin bulat
+                                borderRadius: BorderRadius.circular(50),
                                 child: Image.asset(
                                   'assets/images/logo1.jpeg',
                                   width: 36,
@@ -253,7 +249,6 @@ void initState() {
                                   fit: BoxFit.cover,
                                 ),
                               ),
-
                               const SizedBox(width: 8),
                               const Text(
                                 'PIPOS',
@@ -266,7 +261,8 @@ void initState() {
                               const SizedBox(width: 6),
                               Consumer(
                                 builder: (context, ref, _) {
-                                  final plan = ref.watch(planNotifierProvider);
+                                  final plan =
+                                      ref.watch(planNotifierProvider);
                                   return plan.when(
                                     data: (p) => Container(
                                       padding: const EdgeInsets.symmetric(
@@ -275,7 +271,8 @@ void initState() {
                                       ),
                                       decoration: BoxDecoration(
                                         color: Colors.red,
-                                        borderRadius: BorderRadius.circular(12),
+                                        borderRadius:
+                                            BorderRadius.circular(12),
                                       ),
                                       child: Text(
                                         p?.data.plan ?? 'FREE',
@@ -296,9 +293,10 @@ void initState() {
 
                           const SizedBox(height: 24),
 
-                          // ===== DARK LIGHT =====
+                          /// ===== THEME BUTTON =====
                           Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 16),
                             child: Row(
                               children: [
                                 _themeButton(
@@ -324,7 +322,7 @@ void initState() {
 
                           const SizedBox(height: 20),
 
-                          // ===== MENU =====
+                          /// ===== MENU =====
                           Expanded(
                             child: ListView.builder(
                               itemCount: titles.length,
@@ -345,7 +343,8 @@ void initState() {
                                       color: active
                                           ? Colors.red
                                           : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(12),
+                                      borderRadius:
+                                          BorderRadius.circular(12),
                                     ),
                                     child: Row(
                                       children: [
@@ -374,73 +373,6 @@ void initState() {
                               },
                             ),
                           ),
-
-                          const Divider(color: Colors.white24),
-// ===== USER INFO =====
-Consumer(
-  builder: (context, ref, _) {
-    final user = ref.watch(authViewModelProvider).userData;
-    final name = user?.username ?? 'bar';
-    final email = user?.email ?? 'email@email.com';
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          /// ===== AVATAR (OUTLINE MERAH) =====
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white,
-              border: Border.all(
-                color: Colors.red,
-                width: 1.5,
-              
-              ),
-            ),
-            child: const Center(
-              child: Icon(
-                Icons.person_outline,
-                color: Colors.red,
-                size: 18,
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 12),
-
-          /// ===== TEXT =====
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                name,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                email,
-                style: const TextStyle(
-                  color: Colors.white54,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  },
-),
-
                         ],
                       ),
                     ),
