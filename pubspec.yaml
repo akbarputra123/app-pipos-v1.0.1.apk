@@ -1,0 +1,66 @@
+name: kimpos
+description: "A Point of Sale Application"
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.9.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State / storage / network
+  provider: ^6.1.5+1
+  shared_preferences: ^2.5.4
+  http: ^1.6.0
+  flutter_secure_storage: ^10.0.0
+  sqflite: ^2.4.2
+
+  # PDF receipt + print dialog
+  pdf: ^3.11.3
+  printing: ^5.14.2
+  path: ^1.9.1
+  path_provider: ^2.1.5
+  # Bluetooth Classic untuk printer thermal (SPP/RFCOMM)
+  bluetooth_classic: ^0.0.4
+
+  # Permission helper (Android 12+)
+  permission_handler: ^11.4.0
+  barcode: ^2.2.9
+  barcode_widget: ^2.0.4
+  mobile_scanner: ^7.1.4
+  file_picker: ^10.3.7
+  csv: ^6.0.0
+  image_picker: ^1.2.1
+  flutter_blue_plus: ^2.1.0
+  flutter_riverpod: ^2.5.1
+  dio: ^5.9.0
+  excel: ^2.0.0
+  intl: ^0.18.1
+  share_plus: 12.0.1
+  audioplayers: 6.5.1
+  shimmer: ^3.0.0
+  collection: ^1.19.0
+  auto_size_text: ^3.0.0
+  flutter_launcher_icons: ^0.14.4
+ 
+ 
+
+ 
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/beep.mp3
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
