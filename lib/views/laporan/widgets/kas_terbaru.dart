@@ -1,5 +1,4 @@
 import 'dart:developer';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -23,10 +22,8 @@ class _KasTerbaruState extends ConsumerState<KasTerbaru> {
   void initState() {
     super.initState();
 
-    /// 🔥 FETCH SEKALI SAAT WIDGET MUNCUL
     Future.microtask(() {
       if (_hasFetched) return;
-      log('🚀 KasTerbaru → getTransactions()');
       ref.read(transaksiViewModelProvider.notifier).getTransactions();
       _hasFetched = true;
     });
@@ -34,35 +31,33 @@ class _KasTerbaruState extends ConsumerState<KasTerbaru> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final state = ref.watch(transaksiViewModelProvider);
     final transactions = state.transactions ?? [];
-
-    log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    log('🔁 KasTerbaru BUILD');
-    log('⏳ isLoading : ${state.isLoading}');
-    log('📦 transaksi: ${transactions.length}');
-    log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1E),
+        color: theme.cardColor, // ✅ theme aware
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           /// ===== HEADER =====
           Row(
-            children: const [
-              Icon(Icons.circle, color: Colors.redAccent, size: 10),
-              SizedBox(width: 8),
+            children: [
+              Icon(
+                Icons.circle,
+                color: theme.colorScheme.primary,
+                size: 10,
+              ),
+              const SizedBox(width: 8),
               Text(
                 'Kas Masuk Terbaru',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
+                style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -70,7 +65,7 @@ class _KasTerbaruState extends ConsumerState<KasTerbaru> {
           ),
 
           const SizedBox(height: 12),
-          const Divider(color: Colors.white10),
+          Divider(color: theme.dividerColor),
           const SizedBox(height: 10),
 
           /// ===== LOADING =====
@@ -86,19 +81,18 @@ class _KasTerbaruState extends ConsumerState<KasTerbaru> {
           else if (state.errorMessage != null)
             Text(
               state.errorMessage!,
-              style: const TextStyle(
-                color: Colors.redAccent,
-                fontSize: 12,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
               ),
             )
 
           /// ===== EMPTY =====
           else if (transactions.isEmpty)
-            const Text(
+            Text(
               'Belum ada transaksi',
-              style: TextStyle(
-                color: Colors.white38,
-                fontSize: 12,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color:
+                    theme.textTheme.bodySmall?.color?.withOpacity(0.5),
               ),
             )
 
@@ -106,7 +100,6 @@ class _KasTerbaruState extends ConsumerState<KasTerbaru> {
           else ...[
             const _TableHeader(),
             const SizedBox(height: 6),
-
             ...transactions.take(5).map((trx) {
               return _KasRow(
                 tanggal: _formatDate(trx.createdAt),
@@ -130,8 +123,10 @@ class _TableHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Row(
-      children: const [
+      children: [
         Expanded(
           flex: 2,
           child: _HeaderText('TANGGAL'),
@@ -158,12 +153,14 @@ class _HeaderText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Text(
       text,
-      style: const TextStyle(
-        color: Colors.white38,
+      style: theme.textTheme.bodySmall?.copyWith(
         fontSize: 10,
         fontWeight: FontWeight.w600,
+        color: theme.textTheme.bodySmall?.color?.withOpacity(0.5),
       ),
     );
   }
@@ -185,18 +182,21 @@ class _KasRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Column(
       children: [
-        const Divider(color: Colors.white10),
+        Divider(color: theme.dividerColor),
         Row(
           children: [
             Expanded(
               flex: 2,
               child: Text(
                 tanggal,
-                style: const TextStyle(
-                  color: Colors.white70,
+                style: theme.textTheme.bodySmall?.copyWith(
                   fontSize: 11,
+                  color:
+                      theme.textTheme.bodySmall?.color?.withOpacity(0.7),
                 ),
               ),
             ),
@@ -204,11 +204,10 @@ class _KasRow extends StatelessWidget {
               flex: 3,
               child: Text(
                 keterangan,
-                style: const TextStyle(
-                  color: Colors.white,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
                   fontSize: 11,
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
             ),
             Expanded(
@@ -217,17 +216,19 @@ class _KasRow extends StatelessWidget {
                 alignment: Alignment.centerRight,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 4),
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1F3D2B),
+                    color: theme.colorScheme.primary.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     jumlah,
-                    style: const TextStyle(
-                      color: Color(0xFF4ADE80),
+                    style: theme.textTheme.bodySmall?.copyWith(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.primary,
                     ),
                   ),
                 ),
@@ -253,7 +254,6 @@ String _formatDate(String? iso) {
     return iso;
   }
 }
-
 String _rupiah(double value) {
   return NumberFormat.currency(
     locale: 'id_ID',

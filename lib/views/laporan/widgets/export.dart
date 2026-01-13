@@ -82,7 +82,6 @@ String _formatDate(DateTime date) {
       ),
     );
   }
-
   // ================= BUTTON =================
   Widget _exportButton({
     required BuildContext context,
@@ -341,6 +340,4 @@ pw.TableRow _tableRow(String label, String value) {
     ],
   );
 }
-
-
 }

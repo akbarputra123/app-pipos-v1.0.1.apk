@@ -1,22 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:kimpos/viewmodels/profile_viewmodel.dart';
+import 'package:kimpos/viewmodels/auth_viewmodel.dart';
+import 'package:kimpos/viewmodels/plan_viewmodel.dart';
+
+import 'package:kimpos/viewmodels/kelola_produk_viewmodel.dart';
+
 import 'package:kimpos/views/dashboard/dashboard_screen.dart';
 import 'package:kimpos/views/pengaturan/pengaturan.dart';
+import 'package:kimpos/views/auth/login_screen.dart';
+import 'package:kimpos/views/kasir/kasir_screen.dart';
+import 'package:kimpos/views/produk/produk_screen.dart';
+import 'package:kimpos/views/transaksi/transaksi.dart';
+import 'package:kimpos/views/user/user_screen.dart';
+import 'package:kimpos/views/laporan/laporan.dart';
+import 'package:kimpos/views/log/log_aktivitas.dart';
 
-import '../../viewmodels/plan_viewmodel.dart';
-import '../../viewmodels/auth_viewmodel.dart';
-import '../../viewmodels/theme_notifier.dart';
-import '../../viewmodels/kelola_produk_viewmodel.dart';
-
-import '../auth/login_screen.dart';
-import '../kasir/kasir_screen.dart';
-import '../produk/produk_screen.dart';
-import '../transaksi/transaksi.dart';
-import '../user/user_screen.dart';
-import '../laporan/laporan.dart';
-import '../log/log_aktivitas.dart';
+import 'widgets/header.dart';
+import 'widgets/base_drawer.dart';
 
 class BaseSidebar extends ConsumerStatefulWidget {
   final String role; // owner | admin | kasir
@@ -29,6 +32,7 @@ class BaseSidebar extends ConsumerStatefulWidget {
 class _BaseSidebarState extends ConsumerState<BaseSidebar> {
   int selectedIndex = 0;
   bool isSidebarOpen = false;
+  bool isLoggingOut = false;
 
   late List<String> titles;
   late List<IconData> icons;
@@ -39,9 +43,11 @@ class _BaseSidebarState extends ConsumerState<BaseSidebar> {
     super.initState();
     _setupMenu();
 
-    /// 🔥 WAJIB: FETCH STORE SETIAP LOGIN
     Future.microtask(() {
-      ref.read(profileViewModelProvider.notifier).fetchProfile();
+      final auth = ref.read(authViewModelProvider);
+      if (auth.userData != null) {
+        ref.read(profileViewModelProvider.notifier).fetchProfile();
+      }
     });
 
     SystemChrome.setSystemUIOverlayStyle(
@@ -52,39 +58,9 @@ class _BaseSidebarState extends ConsumerState<BaseSidebar> {
     );
   }
 
+  /// ================= MENU CONFIG =================
   void _setupMenu() {
-    if (widget.role == 'owner') {
-      titles = [
-        'Beranda',
-        'Produk',
-        'Transaksi',
-        'Karyawan',
-        'Laporan',
-        'Pengaturan',
-        'Log Aktivitas',
-        'Logout',
-      ];
-      icons = [
-        Icons.home,
-        Icons.inventory,
-        Icons.receipt_long,
-        Icons.people,
-        Icons.bar_chart,
-        Icons.settings,
-        Icons.history,
-        Icons.logout,
-      ];
-      pages = [
-        const DashboardScreen(),
-        const ProdukScreen(),
-        const TransaksiScreen(),
-        const UserScreen(),
-        const LaporanScreen(),
-        const PengaturanScreen(),
-        const LogAktivitasScreen(),
-        const SizedBox(),
-      ];
-    } else if (widget.role == 'admin') {
+    if (widget.role == 'owner' || widget.role == 'admin') {
       titles = [
         'Beranda',
         'Produk',
@@ -132,89 +108,146 @@ class _BaseSidebarState extends ConsumerState<BaseSidebar> {
     }
   }
 
-  
-void _onTap(int index) {
-  if (titles[index] == 'Logout') {
-    /// ================= RESET STATE =================
-    ref.read(authViewModelProvider.notifier).logout();
+  /// ================= MENU TAP =================
+  Future<void> _onTap(int index) async {
+    if (titles[index] == 'Logout') {
+      final confirm = await _confirmLogout();
+      if (confirm != true) return;
 
-    // 🔥 RESET CACHE PROVIDER
-    ref.invalidate(profileViewModelProvider);
-    ref.invalidate(planNotifierProvider);
-    ref.invalidate(kelolaProdukViewModelProvider);
+      setState(() {
+        isSidebarOpen = false;
+        isLoggingOut = true;
+      });
 
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
-    );
-    return;
+      try {
+        await ref.read(authViewModelProvider.notifier).logout();
+
+        ref.invalidate(profileViewModelProvider);
+        ref.invalidate(planNotifierProvider);
+        ref.invalidate(kelolaProdukViewModelProvider);
+
+        if (!mounted) return;
+
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (_) => false,
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Logout gagal: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      } finally {
+        if (mounted) {
+          setState(() => isLoggingOut = false);
+        }
+      }
+      return;
+    }
+
+    setState(() {
+      selectedIndex = index;
+      isSidebarOpen = false;
+    });
   }
 
-  setState(() {
-    selectedIndex = index;
-    isSidebarOpen = false;
-  });
+  /// ================= LOGOUT DIALOG =================
+Future<bool?> _confirmLogout() {
+  final theme = Theme.of(context);
+
+  return showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) {
+      bool loading = false;
+
+      return StatefulBuilder(
+        builder: (_, setStateDialog) {
+          return AlertDialog(
+            backgroundColor: theme.dialogBackgroundColor, // ✅ theme aware
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Text(
+              'Konfirmasi Logout',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: Text(
+              'Apakah kamu yakin ingin logout?',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.8),
+              ),
+            ),
+            actions: [
+              /// ===== BATAL =====
+              TextButton(
+                onPressed:
+                    loading ? null : () => Navigator.pop(context, false),
+                child: Text(
+                  'Batal',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                  ),
+                ),
+              ),
+
+              /// ===== LOGOUT =====
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.colorScheme.error, // ✅ merah theme
+                  foregroundColor: theme.colorScheme.onError,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  minimumSize: const Size(90, 40),
+                ),
+                onPressed: loading
+                    ? null
+                    : () async {
+                        setStateDialog(() => loading = true);
+                        await Future.delayed(
+                          const Duration(milliseconds: 300),
+                        );
+                        Navigator.pop(context, true);
+                      },
+                child: loading
+                    ? SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: theme.colorScheme.onError,
+                        ),
+                      )
+                    : const Text('Logout'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
 }
 
 
+  /// ================= BUILD =================
   @override
   Widget build(BuildContext context) {
-    final isDark = ref.watch(themeNotifierProvider) == ThemeMode.dark;
-
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Stack(
         children: [
           Column(
             children: [
-              Container(
-                height: 96,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: const BoxDecoration(
-                  color: Colors.black,
-                  border: Border(
-                    bottom: BorderSide(color: Colors.red, width: 2),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.menu, color: Colors.white),
-                      onPressed: () => setState(() => isSidebarOpen = true),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Consumer(
-                          builder: (context, ref, _) {
-                            final store =
-                                ref.watch(profileViewModelProvider).store;
-                            return Text(
-                              store?.name ?? 'PIPOS',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            );
-                          },
-                        ),
-                        Text(
-                          titles[selectedIndex],
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+              BaseHeader(
+                title: titles[selectedIndex],
+                onMenuTap: () => setState(() => isSidebarOpen = true),
               ),
               Expanded(child: pages[selectedIndex]),
             ],
@@ -229,197 +262,17 @@ void _onTap(int index) {
                   color: Colors.black54,
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: Container(
-                      width: 260,
-                      color: Colors.black,
-                      child: Column(
-                        children: [
-                          const SizedBox(height: 32),
-
-                          /// ===== HEADER =====
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(50),
-                                child: Image.asset(
-                                  'assets/images/logo1.jpeg',
-                                  width: 36,
-                                  height: 36,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              const Text(
-                                'PIPOS',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Consumer(
-                                builder: (context, ref, _) {
-                                  final plan =
-                                      ref.watch(planNotifierProvider);
-                                  return plan.when(
-                                    data: (p) => Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.red,
-                                        borderRadius:
-                                            BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        p?.data.plan ?? 'FREE',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                    loading: () => const SizedBox(),
-                                    error: (_, __) => const SizedBox(),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 24),
-
-                          /// ===== THEME BUTTON =====
-                          Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 16),
-                            child: Row(
-                              children: [
-                                _themeButton(
-                                  icon: Icons.dark_mode,
-                                  text: 'Dark',
-                                  active: isDark,
-                                  onTap: () => ref
-                                      .read(themeNotifierProvider.notifier)
-                                      .toggle(true),
-                                ),
-                                const SizedBox(width: 10),
-                                _themeButton(
-                                  icon: Icons.light_mode,
-                                  text: 'Light',
-                                  active: !isDark,
-                                  onTap: () => ref
-                                      .read(themeNotifierProvider.notifier)
-                                      .toggle(false),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(height: 20),
-
-                          /// ===== MENU =====
-                          Expanded(
-                            child: ListView.builder(
-                              itemCount: titles.length,
-                              itemBuilder: (context, i) {
-                                final active = i == selectedIndex;
-                                return GestureDetector(
-                                  onTap: () => _onTap(i),
-                                  child: Container(
-                                    margin: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 6,
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 14,
-                                      horizontal: 14,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: active
-                                          ? Colors.red
-                                          : Colors.transparent,
-                                      borderRadius:
-                                          BorderRadius.circular(12),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          icons[i],
-                                          color: active
-                                              ? Colors.white
-                                              : Colors.white54,
-                                        ),
-                                        const SizedBox(width: 14),
-                                        Text(
-                                          titles[i],
-                                          style: TextStyle(
-                                            color: active
-                                                ? Colors.white
-                                                : Colors.white70,
-                                            fontWeight: active
-                                                ? FontWeight.w600
-                                                : FontWeight.normal,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
+                    child: BaseDrawer(
+                      titles: titles,
+                      icons: icons,
+                      selectedIndex: selectedIndex,
+                      onTap: _onTap,
                     ),
                   ),
                 ),
               ),
             ),
         ],
-      ),
-    );
-  }
-
-  Widget _themeButton({
-    required IconData icon,
-    required String text,
-    required bool active,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.red),
-            color: active ? Colors.red : Colors.transparent,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                color: active ? Colors.white : Colors.white70,
-                size: 18,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                text,
-                style: TextStyle(
-                  color: active ? Colors.white : Colors.white70,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

@@ -7,6 +7,8 @@ import '../models/user_model.dart';
 
 class AuthService {
   static const String loginEndpoint = "/api/auth/login";
+  static const String logoutEndpoint = "/api/auth/logout";
+
 
   // Instance Dio
   static final Dio _dio = Dio(
@@ -160,11 +162,50 @@ static Future<int?> getUserId() async {
   return id;
 }
 
-  /// =====================
-  /// LOGOUT
-  /// =====================
-  static Future<void> logout() async {
+
+/// =====================
+/// LOGOUT (API - TOKEN BASED)
+/// =====================
+static Future<AuthResponse> logoutApi() async {
+  try {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    final token = prefs.getString('token');
+
+    print("📤 LOGOUT REQUEST (TOKEN)");
+
+    final response = await _dio.post(
+      logoutEndpoint,
+      options: Options(
+        headers: {
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        validateStatus: (status) => true,
+      ),
+    );
+
+    print("📥 LOGOUT RESPONSE");
+    print("🔢 Status Code : ${response.statusCode}");
+    print("📦 Response Data:");
+    print(response.data);
+
+    return AuthResponse.fromJson(response.data);
+  } on DioError catch (e) {
+    print("❌ LOGOUT DIO ERROR");
+    print(e.response?.data);
+
+    return AuthResponse(
+      success: false,
+      message: e.response?.data?['message'] ?? 'Logout gagal',
+    );
+  } catch (e) {
+    print("❌ LOGOUT ERROR: $e");
+
+    return AuthResponse(
+      success: false,
+      message: 'Terjadi kesalahan logout',
+    );
   }
+}
+
+
 }

@@ -60,40 +60,49 @@ static Future<List<KelolaUser>> getUsers() async {
   /// Tambah user
   /// =====================
   static Future<bool> createUser(KelolaUser user) async {
-    try {
-      final token = await AuthService.getToken();
-      final prefs = await SharedPreferences.getInstance();
-      final storeId = prefs.getInt('store_id');
+  final token = await AuthService.getToken();
+  final prefs = await SharedPreferences.getInstance();
+  final storeId = prefs.getInt('store_id');
 
-      if (storeId == null || token == null) {
-        print("❌ Store ID atau Token tidak tersedia");
-        return false;
-      }
-
-      final url = '${BaseUrl.api}/api/stores/$storeId/users';
-
-      final response = await _dio.post(
-        url,
-        data: user.toJson(),
-        options: Options(
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer $token",
-          },
-        ),
-      );
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return true;
-      } else {
-        print("❌ Gagal menambahkan user: ${response.data}");
-        return false;
-      }
-    } catch (e) {
-      print("❌ Error createUser: $e");
-      return false;
-    }
+  if (storeId == null || token == null) {
+    throw Exception("Store ID atau Token tidak tersedia");
   }
+
+  final url = '${BaseUrl.api}/api/stores/$storeId/users';
+
+  final response = await _dio.post(
+    url,
+    data: user.toJson(),
+    options: Options(
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $token",
+      },
+
+      // 🔥 PENTING: JANGAN BIARKAN DIO AUTO THROW
+      validateStatus: (status) =>
+          status != null && status >= 200 && status < 500,
+    ),
+  );
+
+  // =============================
+  // HANDLE RESPONSE
+  // =============================
+  if (response.statusCode == 200 || response.statusCode == 201) {
+    return true;
+  }
+
+  // 🔥 STATUS 400 / 409 → lempar DioException berisi response
+  if (response.statusCode == 400 || response.statusCode == 409) {
+    throw DioException(
+      requestOptions: response.requestOptions,
+      response: response,
+      type: DioExceptionType.badResponse,
+    );
+  }
+  throw Exception("Gagal menambahkan user");
+}
+
 
   /// =====================
   /// Update user

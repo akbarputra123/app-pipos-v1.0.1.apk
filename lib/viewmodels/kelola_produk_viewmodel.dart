@@ -39,7 +39,9 @@ class KelolaProdukState {
 class KelolaProdukViewModel extends StateNotifier<KelolaProdukState> {
   KelolaProdukViewModel() : super(KelolaProdukState());
 
-  /// Ambil semua produk
+  /// =====================
+  /// GET PRODUK
+  /// =====================
   Future<void> getProduk() async {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
@@ -47,238 +49,228 @@ class KelolaProdukViewModel extends StateNotifier<KelolaProdukState> {
       state = state.copyWith(isLoading: false, products: data);
     } catch (e) {
       state = state.copyWith(isLoading: false, errorMessage: e.toString());
-      print("❌ getProduk failed: $e");
     }
   }
 
-  /// Tambah produk
+  /// =====================
+  /// CREATE
+  /// =====================
   Future<bool> createProduk(ProdukModel produk, {File? imageFile}) async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
-    try {
-      final success = await KelolaProdukService.createProdukWithImage(
-        produk,
-        imageFile: imageFile,
-      );
-      if (success) await getProduk();
-      state = state.copyWith(isLoading: false);
-      return success;
-    } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
-      return false;
-    }
+    state = state.copyWith(isLoading: true);
+    final success = await KelolaProdukService.createProdukWithImage(
+      produk,
+      imageFile: imageFile,
+    );
+    if (success) await getProduk();
+    state = state.copyWith(isLoading: false);
+    return success;
   }
 
-  /// Update produk
+  /// =====================
+  /// UPDATE
+  /// =====================
   Future<bool> updateProduk(
     int productId,
     ProdukModel produk, {
     File? imageFile,
   }) async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
-    try {
-      final success = await KelolaProdukService.updateProdukWithImage(
-        productId,
-        produk,
-        imageFile: imageFile,
-      );
-      if (success) await getProduk();
-      state = state.copyWith(isLoading: false);
-      return success;
-    } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
-      return false;
-    }
+    state = state.copyWith(isLoading: true);
+    final success = await KelolaProdukService.updateProdukWithImage(
+      productId,
+      produk,
+      imageFile: imageFile,
+    );
+    if (success) await getProduk();
+    state = state.copyWith(isLoading: false);
+    return success;
   }
 
-  /// Hapus produk
+  /// =====================
+  /// DELETE
+  /// =====================
   Future<bool> deleteProduk(int productId) async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
-    try {
-      final success = await KelolaProdukService.deleteProduk(productId);
-      if (success) await getProduk();
-      state = state.copyWith(isLoading: false);
-      return success;
-    } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
-      return false;
-    }
+    state = state.copyWith(isLoading: true);
+    final success = await KelolaProdukService.deleteProduk(productId);
+    if (success) await getProduk();
+    state = state.copyWith(isLoading: false);
+    return success;
   }
 
   /// =====================
-  /// Helper untuk UI: string promo
+  /// PROMO TEXT (SUPPORT BUNDLE)
   /// =====================
-  String getPromoText(ProdukModel produk) {
-    if (produk.promoType == null) return "";
-    switch (produk.promoType) {
+  String getPromoText(ProdukModel p) {
+    if (p.promoType == null) return "";
+
+    switch (p.promoType) {
       case "percentage":
-      case "percent":
-        return produk.promoPercent != null
-            ? "${produk.promoPercent!.toStringAsFixed(0)}% OFF"
-            : "";
+        return "${p.promoPercent?.toStringAsFixed(0)}% OFF";
+
       case "buyxgety":
-      case "buy_get":
-        final buy = produk.buyQty ?? 0;
-        final free = produk.freeQty ?? 0;
-        return "Beli $buy Gratis $free";
+        return "Beli ${p.buyQty} Gratis ${p.freeQty}";
+
+      case "bundle":
+        return "${p.bundleQty} pcs Rp${p.bundleTotalPrice?.toStringAsFixed(0)}";
+
       default:
         return "";
     }
   }
 
+  /// =====================
+  /// ADD TO CART
+  /// =====================
+  void addToCart(ProdukModel produk) {
+    final updated = state.products.map((p) {
+      if (p.id != produk.id) return p;
 
+      // ===== BUY X GET Y =====
+      if (p.promoType == "buyxgety" &&
+          p.buyQty != null &&
+          p.freeQty != null) {
+        final paidQty = _getPaidQty(p) + 1;
+        final bonusQty = (paidQty ~/ p.buyQty!) * p.freeQty!;
+        final totalQty = paidQty + bonusQty;
 
-
-  /// Export Produk ke Excel dan simpan ke folder Downloads
-  Future<String?> exportProdukToExcel() async {
-    try {
-      if (state.products.isEmpty) throw "Tidak ada produk untuk diexport";
-
-      // Minta izin storage
-      final status = await Permission.storage.request();
-      if (Platform.isAndroid) {
-        if (await Permission.manageExternalStorage.request().isDenied) {
-          throw "Izin storage ditolak";
-        }
-      } else {
-        if (await Permission.storage.request().isDenied) {
-          throw "Izin storage ditolak";
-        }
+        if (totalQty > p.stock) return p;
+        return p.copyWith(qty: totalQty);
       }
 
-      var excel = Excel.createExcel();
-      final Sheet sheet = excel['Produk'];
+      // ===== BUNDLE & NORMAL =====
+      if (p.qty < p.stock) {
+        return p.copyWith(qty: p.qty + 1);
+      }
+      return p;
+    }).toList();
 
-      // Header
+    state = state.copyWith(products: updated);
+  }
+
+  /// =====================
+  /// REMOVE FROM CART
+  /// =====================
+  void removeFromCart(ProdukModel produk) {
+    state = state.copyWith(
+      products: state.products
+          .map((p) => p.id == produk.id ? p.copyWith(qty: 0) : p)
+          .toList(),
+    );
+  }
+
+  /// =====================
+  /// INCREASE
+  /// =====================
+  void increaseQty(ProdukModel produk) => addToCart(produk);
+
+  /// =====================
+  /// DECREASE
+  /// =====================
+  void decreaseQty(ProdukModel produk) {
+    final updated = state.products.map((p) {
+      if (p.id != produk.id) return p;
+      if (p.qty <= 0) return p;
+
+      // BUY X GET Y
+      if (p.promoType == "buyxgety" &&
+          p.buyQty != null &&
+          p.freeQty != null) {
+        final paidQty = _getPaidQty(p) - 1;
+        if (paidQty <= 0) return p.copyWith(qty: 0);
+
+        final bonusQty = (paidQty ~/ p.buyQty!) * p.freeQty!;
+        return p.copyWith(qty: paidQty + bonusQty);
+      }
+
+      // BUNDLE & NORMAL
+      return p.copyWith(qty: p.qty - 1);
+    }).toList();
+
+    state = state.copyWith(products: updated);
+  }
+
+  /// =====================
+  /// CART ITEMS
+  /// =====================
+  List<ProdukModel> get cartItems =>
+      state.products.where((p) => p.qty > 0).toList();
+
+  /// =====================
+  /// CLEAR CART
+  /// =====================
+  void clearCart() {
+    state = state.copyWith(
+      products: state.products.map((p) => p.copyWith(qty: 0)).toList(),
+    );
+  }
+
+  /// =====================
+  /// HELPER BUY X GET Y
+  /// =====================
+  int _getPaidQty(ProdukModel p) {
+    if (p.promoType != "buyxgety" ||
+        p.buyQty == null ||
+        p.freeQty == null) {
+      return p.qty;
+    }
+
+    int paid = 0;
+    while (true) {
+      final bonus = (paid ~/ p.buyQty!) * p.freeQty!;
+      if (paid + bonus >= p.qty) break;
+      paid++;
+    }
+    return paid;
+  }
+
+  /// =====================
+  /// EXPORT EXCEL (SUPPORT BUNDLE)
+  /// =====================
+  Future<String?> exportProdukToExcel() async {
+    try {
+      await Permission.storage.request();
+
+      var excel = Excel.createExcel();
+      final sheet = excel['Produk'];
+
       sheet.appendRow([
         "ID",
         "Nama",
         "SKU",
-        "Barcode",
-        "Harga Modal",
         "Harga Jual",
         "Stok",
-        "Kategori",
-        "Deskripsi",
         "Promo",
-        "Buy Qty",
-        "Free Qty",
+        "Bundle Qty",
+        "Bundle Price",
         "Aktif",
-        "Created At",
-        "Updated At",
       ]);
 
-      // Data
       for (var p in state.products) {
         sheet.appendRow([
-          p.id ?? 0,
-          p.name ?? "",
-          p.sku ?? "",
-          p.barcode ?? "",
-          p.costPrice ?? 0,
-          p.sellPrice ?? 0,
-          p.stock ?? 0,
-          p.category ?? "",
-          p.description ?? "",
+          p.id,
+          p.name,
+          p.sku,
+          p.sellPrice,
+          p.stock,
           getPromoText(p),
-          p.buyQty ?? 0,
-          p.freeQty ?? 0,
-      
-          p.isActive ?? 0,
-          p.createdAt?.toIso8601String() ?? "",
-          p.updatedAt?.toIso8601String() ?? "",
+          p.bundleQty,
+          p.bundleTotalPrice,
+          p.isActive,
         ]);
       }
 
-      // Direktori Downloads
-     Directory downloadsDirectory;
+      Directory dir = Platform.isAndroid
+          ? Directory('/storage/emulated/0/Download')
+          : await getApplicationDocumentsDirectory();
 
-if (Platform.isAndroid) {
-  downloadsDirectory = Directory('/storage/emulated/0/Download');
-  if (!await downloadsDirectory.exists()) {
-    downloadsDirectory = (await getExternalStorageDirectory())!;
-  }
-} else {
-  downloadsDirectory = await getApplicationDocumentsDirectory();
-}
+      final file =
+          File("${dir.path}/produk_${DateTime.now().millisecondsSinceEpoch}.xlsx");
 
-
-      final filePath =
-          "${downloadsDirectory.path}/produk_export_${DateTime.now().millisecondsSinceEpoch}.xlsx";
-      final bytes = excel.encode();
-      if (bytes == null) throw "Gagal membuat file Excel";
-      final file = File(filePath);
-      await file.writeAsBytes(bytes, flush: true);
-
-      print("✅ Excel berhasil dibuat di: $filePath");
-      return filePath;
+      file.writeAsBytesSync(excel.encode()!);
+      return file.path;
     } catch (e) {
-      print("❌ exportProdukToExcel failed: $e");
       return null;
     }
   }
-
-
-
- void addToCart(ProdukModel produk) {
-    final updatedProducts = state.products.map((p) {
-      if (p.id == produk.id) return p.copyWith(qty: 1);
-      return p;
-    }).toList();
-    state = state.copyWith(products: updatedProducts);
-  }
-
-  void removeFromCart(ProdukModel produk) {
-    final updatedProducts = state.products.map((p) {
-      if (p.id == produk.id) return p.copyWith(qty: 0);
-      return p;
-    }).toList();
-    state = state.copyWith(products: updatedProducts);
-  }
-
-   void increaseQty(ProdukModel produk) {
-  final updatedProducts = state.products.map((p) {
-    if (p.id == produk.id && p.qty < p.stock) {
-      return p.copyWith(qty: p.qty + 1);
-    }
-    return p;
-  }).toList();
-
-  state = state.copyWith(products: updatedProducts);
-}
-
-
-  void decreaseQty(ProdukModel produk) {
-    final updatedProducts = state.products.map((p) {
-      if (p.id == produk.id && p.qty > 0) {
-        return p.copyWith(qty: p.qty - 1);
-      }
-      return p;
-    }).toList();
-    state = state.copyWith(products: updatedProducts);
-  }
-
-  List<ProdukModel> get cartItems =>
-      state.products.where((p) => p.qty > 0).toList();
-
-
-      /// =====================
-/// CLEAR CART
-/// =====================
-void clearCart() {
-  final clearedProducts = state.products.map((p) {
-    if (p.qty > 0) {
-      return p.copyWith(qty: 0);
-    }
-    return p;
-  }).toList();
-
-  state = state.copyWith(products: clearedProducts);
-
-  print("🧹 KelolaProdukViewModel: Cart berhasil dikosongkan");
-}
-
-
-
 }
 
 /// =====================
@@ -286,5 +278,5 @@ void clearCart() {
 /// =====================
 final kelolaProdukViewModelProvider =
     StateNotifierProvider<KelolaProdukViewModel, KelolaProdukState>(
-      (ref) => KelolaProdukViewModel(),
-    );
+  (ref) => KelolaProdukViewModel(),
+);

@@ -25,10 +25,11 @@ class _LogAktivitasScreenState
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final state = ref.watch(logViewModelProvider);
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Column(
         children: [
           /// ================= LIST =================
@@ -36,8 +37,10 @@ class _LogAktivitasScreenState
             child: Builder(
               builder: (_) {
                 if (state.isLoading) {
-                  return const Center(
-                    child: CircularProgressIndicator(),
+                  return Center(
+                    child: CircularProgressIndicator(
+                      color: theme.colorScheme.primary,
+                    ),
                   );
                 }
 
@@ -45,16 +48,19 @@ class _LogAktivitasScreenState
                   return Center(
                     child: Text(
                       state.error!,
-                      style: const TextStyle(color: Colors.redAccent),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.error,
+                      ),
                     ),
                   );
                 }
 
                 if (state.items.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Text(
                       'Belum ada aktivitas',
-                      style: TextStyle(color: Colors.white54),
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(color: theme.hintColor),
                     ),
                   );
                 }
@@ -80,59 +86,61 @@ class _LogAktivitasScreenState
             ),
           ),
 
-          /// ================= PAGINATION =================
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0E0E0E),
-              border: Border(
-                top:
-                    BorderSide(color: Colors.white.withOpacity(0.05)),
+          /// ================= PAGINATION (SAFE AREA) =================
+          SafeArea(
+            top: false,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
               ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                TextButton(
-                  onPressed: state.page > 1
-                      ? () {
-                          ref
-                              .read(logViewModelProvider.notifier)
-                              .fetchLogs(limit: state.limit);
-                        }
-                      : null,
-                  child: Text(
-                    'Sebelumnya',
-                    style: TextStyle(
-                      color: state.page > 1
-                          ? Colors.white
-                          : Colors.white.withOpacity(0.4),
-                      fontSize: 10,
+              decoration: BoxDecoration(
+                color: theme.cardColor,
+                border: Border(
+                  top: BorderSide(color: theme.dividerColor),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: state.page > 1
+                        ? () {
+                            ref
+                                .read(logViewModelProvider.notifier)
+                                .fetchLogs(limit: state.limit);
+                          }
+                        : null,
+                    child: Text(
+                      'Sebelumnya',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: state.page > 1
+                            ? theme.textTheme.bodySmall?.color
+                            : theme.disabledColor,
+                      ),
                     ),
                   ),
-                ),
-                Text(
-                  'Halaman ${state.page} dari ${state.pages} ',
-                  style: const TextStyle(
-                    color: Colors.redAccent,
-                    fontSize: 10,
+                  Text(
+                    'Halaman ${state.page} dari ${state.pages}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                    ),
                   ),
-                ),
-                TextButton(
-                  onPressed: state.page < state.pages
-                      ? () {
-                          ref
-                              .read(logViewModelProvider.notifier)
-                              .loadMore();
-                        }
-                      : null,
-                  child: const Text(
-                    'Berikutnya »',
-                    style: TextStyle(color: Colors.white),
+                  TextButton(
+                    onPressed: state.page < state.pages
+                        ? () {
+                            ref
+                                .read(logViewModelProvider.notifier)
+                                .loadMore();
+                          }
+                        : null,
+                    child: Text(
+                      'Berikutnya »',
+                      style: theme.textTheme.bodySmall,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -140,9 +148,7 @@ class _LogAktivitasScreenState
     );
   }
 
-  /// ===============================
-  /// ICON MAPPING
-  /// ===============================
+  /// ================= ICON MAPPING =================
   IconData _iconFromAction(String? action) {
     final a = action?.toLowerCase() ?? '';
     if (a.contains('login')) return Icons.login;
@@ -154,31 +160,28 @@ class _LogAktivitasScreenState
     return Icons.history;
   }
 
-  /// ===============================
-  /// TIME AGO
-  /// ===============================
- String _timeAgo(DateTime? date) {
-  if (date == null) return '-';
+  /// ================= TIME AGO =================
+  String _timeAgo(DateTime? date) {
+    if (date == null) return '-';
 
-  final now = DateTime.now();
-  final diff = now.difference(date);
+    final now = DateTime.now();
+    final diff = now.difference(date);
 
-  if (diff.isNegative) {
+    if (diff.isNegative) {
+      return DateFormat('dd MMM yyyy, HH:mm').format(date);
+    }
+
+    if (diff.inSeconds < 60) return 'Baru saja';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} menit lalu';
+    if (diff.inHours < 24) return '${diff.inHours} jam lalu';
+    if (diff.inDays < 7) return '${diff.inDays} hari lalu';
+
     return DateFormat('dd MMM yyyy, HH:mm').format(date);
   }
-
-  if (diff.inSeconds < 60) return 'Baru saja';
-  if (diff.inMinutes < 60) return '${diff.inMinutes} menit lalu';
-  if (diff.inHours < 24) return '${diff.inHours} jam lalu';
-  if (diff.inDays < 7) return '${diff.inDays} hari lalu';
-
-  return DateFormat('dd MMM yyyy, HH:mm').format(date);
-}
-
 }
 
 /// =======================================================
-/// CARD LOG
+/// CARD LOG (DARK / LIGHT READY)
 /// =======================================================
 class _LogCard extends StatelessWidget {
   final String title;
@@ -197,12 +200,14 @@ class _LogCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF161616),
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Row(
         children: [
@@ -211,10 +216,14 @@ class _LogCard extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: Colors.redAccent.withOpacity(0.15),
+              color: theme.colorScheme.error.withOpacity(0.15),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: Colors.redAccent, size: 20),
+            child: Icon(
+              icon,
+              color: theme.colorScheme.error,
+              size: 20,
+            ),
           ),
 
           const SizedBox(width: 12),
@@ -226,18 +235,14 @@ class _LogCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.6),
-                    fontSize: 12,
-                  ),
+                  style: theme.textTheme.bodySmall,
                 ),
               ],
             ),
@@ -249,17 +254,13 @@ class _LogCard extends StatelessWidget {
             children: [
               Text(
                 user,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
-                  fontSize: 12,
-                ),
+                style: theme.textTheme.bodySmall,
               ),
               const SizedBox(height: 2),
               Text(
                 time,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.4),
-                  fontSize: 11,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.hintColor,
                 ),
               ),
             ],

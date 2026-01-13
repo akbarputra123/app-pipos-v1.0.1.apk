@@ -65,7 +65,7 @@ class ExportKaryawanBar extends ConsumerWidget {
     required VoidCallback onPressed,
   }) {
     return SizedBox(
-      height: 28,
+      height: 32,
       child: ElevatedButton.icon(
         onPressed: enabled ? onPressed : null,
         icon: Icon(icon, size: 14),

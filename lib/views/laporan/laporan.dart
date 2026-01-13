@@ -31,8 +31,7 @@ class _LaporanScreenState extends ConsumerState<LaporanScreen> {
   bool _fetched = false;
 
   /// 🔥 FILTER AKTIF
-  FilterRange _activeFilter = FilterRange.today; // 🔥 DEFAULT HARI INI
-
+  FilterRange _activeFilter = FilterRange.today;
 
   @override
   void initState() {
@@ -40,47 +39,49 @@ class _LaporanScreenState extends ConsumerState<LaporanScreen> {
     _fetchByFilter(_activeFilter);
   }
 
+  /// ===============================
+  /// RANGE FILTER
+  /// ===============================
   (DateTime start, DateTime end) _resolveRange(FilterRange filter) {
-  final now = DateTime.now();
+    final now = DateTime.now();
 
-  switch (filter) {
-    case FilterRange.today:
-      return (
-        DateTime(now.year, now.month, now.day, 0, 0, 0),
-        DateTime(now.year, now.month, now.day, 23, 59, 59),
-      );
+    switch (filter) {
+      case FilterRange.today:
+        return (
+          DateTime(now.year, now.month, now.day, 0, 0, 0),
+          DateTime(now.year, now.month, now.day, 23, 59, 59),
+        );
 
-    case FilterRange.last7Days:
-      return (
-        DateTime(now.year, now.month, now.day)
-            .subtract(const Duration(days: 6)),
-        DateTime(now.year, now.month, now.day, 23, 59, 59),
-      );
+      case FilterRange.last7Days:
+        return (
+          DateTime(now.year, now.month, now.day)
+              .subtract(const Duration(days: 6)),
+          DateTime(now.year, now.month, now.day, 23, 59, 59),
+        );
 
-    case FilterRange.last30Days:
-      return (
-        DateTime(now.year, now.month, now.day)
-            .subtract(const Duration(days: 29)),
-        DateTime(now.year, now.month, now.day, 23, 59, 59),
-      );
+      case FilterRange.last30Days:
+        return (
+          DateTime(now.year, now.month, now.day)
+              .subtract(const Duration(days: 29)),
+          DateTime(now.year, now.month, now.day, 23, 59, 59),
+        );
 
-    case FilterRange.oneYear:
-      return (
-        DateTime(now.year, 1, 1, 0, 0, 0),
-        DateTime(now.year, 12, 31, 23, 59, 59),
-      );
+      case FilterRange.oneYear:
+        return (
+          DateTime(now.year, 1, 1),
+          DateTime(now.year, 12, 31, 23, 59, 59),
+        );
 
-    case FilterRange.all:
-      return (
-        DateTime(2000, 1, 1, 0, 0, 0),
-        DateTime(now.year, now.month, now.day, 23, 59, 59),
-      );
+      case FilterRange.all:
+        return (
+          DateTime(2000, 1, 1),
+          DateTime(now.year, now.month, now.day, 23, 59, 59),
+        );
+    }
   }
-}
-
 
   /// ===============================
-  /// FETCH DATA (SUMMARY + CASHIER)
+  /// FETCH DATA
   /// ===============================
   Future<void> _fetchByFilter(FilterRange filter) async {
     if (_fetched) return;
@@ -112,6 +113,7 @@ class _LaporanScreenState extends ConsumerState<LaporanScreen> {
       start: start,
       end: end,
     );
+
     await vm.fetchDailyList(
       storeId: storeId,
       token: token,
@@ -119,36 +121,40 @@ class _LaporanScreenState extends ConsumerState<LaporanScreen> {
       end: end,
     );
 
-    setState(() {
-      _fetched = true;
-    });
+    if (mounted) {
+      setState(() => _fetched = true);
+    }
   }
 
   /// ===============================
-  /// SHIMMER
+  /// SHIMMER (THEME AWARE)
   /// ===============================
-  Widget shimmerBox({double height = 60}) {
+  Widget shimmerBox(BuildContext context, {double height = 60}) {
+    final theme = Theme.of(context);
+
     return Shimmer.fromColors(
-      baseColor: const Color(0xFF1E1E1E),
-      highlightColor: const Color(0xFF2A2A2A),
+      baseColor: theme.cardColor,
+      highlightColor: theme.cardColor.withOpacity(
+        theme.brightness == Brightness.dark ? 0.6 : 0.4,
+      ),
       child: Container(
         height: height,
         width: double.infinity,
         decoration: BoxDecoration(
-          color: Colors.grey,
+          color: theme.cardColor,
           borderRadius: BorderRadius.circular(12),
         ),
       ),
     );
   }
 
+  /// ===============================
+  /// BUILD
+  /// ===============================
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(laporanViewModelProvider);
 
-    /// ===============================
-    /// BODY PER HEADER INDEX
-    /// ===============================
     final headerBodies = [
       /// ===== 0. LAPORAN KEUANGAN =====
       SingleChildScrollView(
@@ -165,7 +171,6 @@ class _LaporanScreenState extends ConsumerState<LaporanScreen> {
             const TotalSummary(),
             const SizedBox(height: 12),
 
-            /// FILTER WAKTU
             FilterWaktu(
               active: _activeFilter,
               onChanged: (filter) async {
@@ -179,13 +184,13 @@ class _LaporanScreenState extends ConsumerState<LaporanScreen> {
             const SizedBox(height: 12),
 
             state.summary == null
-                ? shimmerBox(height: 240)
+                ? shimmerBox(context, height: 240)
                 : const SemuaLaporan(),
 
             const SizedBox(height: 16),
 
             state.summary == null
-                ? shimmerBox(height: 160)
+                ? shimmerBox(context, height: 160)
                 : const KasTerbaru(),
 
             const SizedBox(height: 24),
@@ -204,8 +209,7 @@ class _LaporanScreenState extends ConsumerState<LaporanScreen> {
     ];
 
     return Scaffold(
-     backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
         child: Column(
@@ -214,14 +218,11 @@ class _LaporanScreenState extends ConsumerState<LaporanScreen> {
             HeaderLaporan(
               activeIndex: selectedHeaderIndex,
               onMenuTap: (index) {
-                setState(() {
-                  selectedHeaderIndex = index;
-                });
+                setState(() => selectedHeaderIndex = index);
               },
             ),
             const SizedBox(height: 16),
 
-            /// 🔥 PINDAH HALAMAN BERDASARKAN INDEX
             Expanded(child: headerBodies[selectedHeaderIndex]),
           ],
         ),

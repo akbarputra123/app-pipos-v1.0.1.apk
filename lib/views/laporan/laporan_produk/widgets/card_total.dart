@@ -13,20 +13,24 @@ class CardTotal extends StatelessWidget {
     required this.value,
     required this.label,
   });
-
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF151515),
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Colors.white.withOpacity(0.05),
+          color: theme.dividerColor.withOpacity(0.5),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.5),
+            color: theme.shadowColor.withOpacity(
+              isDark ? 0.6 : 0.15,
+            ),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
@@ -40,42 +44,42 @@ class CardTotal extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: iconBgColor,
+              color: iconBgColor.withOpacity(isDark ? 1 : 0.9),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               icon,
-              color: Colors.white,
+              color: theme.colorScheme.onPrimary,
               size: 18,
             ),
           ),
 
           const SizedBox(width: 10),
 
-          /// ===== TEXT (ANTI OVERFLOW) =====
+          /// ===== TEXT =====
           Expanded(
             child: Column(
-              mainAxisSize: MainAxisSize.min, // ⬅️ PENTING
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: theme.textTheme.bodyLarge?.copyWith(
                     fontSize: 17,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   label,
-                  maxLines: 1, // ⬅️ WAJIB 1 baris di HP
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: theme.textTheme.bodySmall?.copyWith(
                     fontSize: 10.5,
-                    color: Colors.white.withOpacity(0.55),
+                    color: theme.textTheme.bodySmall?.color
+                        ?.withOpacity(0.6),
                   ),
                 ),
               ],

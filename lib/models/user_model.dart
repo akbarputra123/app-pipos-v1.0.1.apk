@@ -1,3 +1,5 @@
+import 'store_profile_model.dart';
+
 class AuthResponse {
   final bool success;
   final String message;
@@ -32,10 +34,13 @@ class User {
   final String dbName;
   final String plan;
 
-  // OPTIONAL
+  // OPTIONAL (lama)
   final String? name;
   final String? businessName;
   final String? storeName;
+
+  // 🔥 TAMBAHAN BARU (UNTUK OWNER)
+  final List<StoreProfile> stores;
 
   User({
     required this.id,
@@ -49,6 +54,7 @@ class User {
     this.name,
     this.businessName,
     this.storeName,
+    this.stores = const [], // 🔥 DEFAULT AMAN
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -61,10 +67,29 @@ class User {
       email: json['email'],
       dbName: json['db_name'],
       plan: json['plan'],
-      name: json['name'], // boleh null
+      name: json['name'],
       businessName: json['business_name'],
       storeName: json['store_name'],
+stores: json['stores'] != null
+    ? (json['stores'] as List)
+        .map(
+          (e) => StoreProfile.fromJson({
+            'id': e['id'],
+            'owner_id': json['owner_id'], // 🔥 ambil dari user
+            'name': e['name'] ?? '',
+            'phone': '',
+            'address': '',
+            'receipt_template': '',
+            'created_at': DateTime.now().toIso8601String(),
+            'tax_percentage': 0,
+          }),
+        )
+        .toList()
+    : const [],
+
+     
     );
   }
 }
+
 

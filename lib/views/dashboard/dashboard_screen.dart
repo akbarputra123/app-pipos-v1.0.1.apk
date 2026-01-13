@@ -4,10 +4,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../models/laporan_model.dart';
 import '../../viewmodels/laporan_viewmodel.dart';
 import '../../viewmodels/plan_viewmodel.dart';
+import '../../viewmodels/kelola_produk_viewmodel.dart';
 import '../../services/auth_service.dart';
-import '../../models/laporan_model.dart';
+import '../dashboard/widgets/shimer.dart';
+
+/// ================= STORE ID PROVIDER =================
+final storeIdProvider = FutureProvider<int?>((ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getInt('store_id');
+});
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -23,90 +31,76 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     decimalDigits: 0,
   );
 
-  String role = 'admin'; // DEFAULT
-  int? _userId; // 🔥 USER ID LOGIN
+  String? role;
+  int? userId;
+  bool _hasListener = false;
 
   @override
   void initState() {
     super.initState();
+    _loadDashboard();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final prefs = await SharedPreferences.getInstance();
-
-      final storeId = prefs.getInt('store_id');
-      final token = prefs.getString('token');
-
-      final userRole = await AuthService.getUserRole();
-      final userId = prefs.getInt('user_id');
-
-      if (!mounted) return;
-
-      setState(() {
-        role = userRole;
-        _userId = userId;
-      });
-
-      if (storeId == null || token == null || token.isEmpty) {
-        log('❌ Dashboard: storeId / token null');
-        return;
-      }
-
-      final now = DateTime.now();
-      final start = DateTime(now.year, now.month, now.day, 0, 0, 0);
-      final end = DateTime(now.year, now.month, now.day, 23, 59, 59);
-
-      final vm = ref.read(laporanViewModelProvider.notifier);
-
-      if (role == 'cashier') {
-        log('👤 DASHBOARD MODE: CASHIER | userId=$_userId');
-
-        vm.fetchCashierReport(
-          storeId: storeId,
-          token: token,
-          start: start,
-          end: end,
-        );
-      } else {
-        log('👑 DASHBOARD MODE: OWNER / ADMIN');
-
-        vm.fetchSummary(storeId: storeId, token: token, start: start, end: end);
-
-        vm.fetchProductReport(
-          storeId: storeId,
-          token: token,
-          start: start,
-          end: end,
-        );
-      }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(kelolaProdukViewModelProvider.notifier).getProduk();
     });
+  }
+
+  CashierPerformance? _getActiveCashier(
+    ReportCashier? report,
+    int? userId,
+  ) {
+    if (report == null || userId == null) return null;
+
+    return report.cashiers.firstWhere(
+      (c) => c.id == userId,
+      orElse: () => CashierPerformance(
+        id: userId,
+        name: '',
+        role: 'cashier',
+        totalTransaksi: 0,
+        totalPenjualan: 0,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (!_hasListener) {
+      _hasListener = true;
+      ref.listen<AsyncValue<int?>>(storeIdProvider, (_, __) {
+        log('🔁 Store berubah → reload dashboard');
+        _loadDashboard();
+      });
+    }
+
+    final theme = Theme.of(context);
     final laporan = ref.watch(laporanViewModelProvider);
     final planAsync = ref.watch(planNotifierProvider);
 
-    final summary = laporan.summary;
-    final product = laporan.productReport;
-    final cashier = laporan.cashierReport;
+    final produkState = ref.watch(kelolaProdukViewModelProvider);
+    final produkList = produkState.products;
 
-    /// 🔥 AMBIL DATA KASIR SESUAI ID LOGIN
-    CashierPerformance? cashierData;
-    if (role == 'cashier' &&
-        cashier != null &&
-        cashier.cashiers.isNotEmpty &&
-        _userId != null) {
-      cashierData = cashier.cashiers.firstWhere(
-        (c) => c.id == _userId,
-        orElse: () => CashierPerformance(
-          id: 0,
-          name: '',
-          role: '',
-          totalTransaksi: 0,
-          totalPenjualan: 0.0,
-        ),
-      );
+    final totalProduk = produkList.length;
+    final stokMenipis =
+        produkList.where((p) => p.stock > 0 && p.stock < 10).length;
+
+    if (role == null) {
+      return const Center(child: CircularProgressIndicator());
     }
+
+    final summary = laporan.summary;
+    final cashierReport = laporan.cashierReport;
+
+    final cashierData =
+        role == 'cashier' ? _getActiveCashier(cashierReport, userId) : null;
+
+    final totalPenjualanHariIni = role == 'cashier'
+        ? cashierData?.totalPenjualan ?? 0
+        : summary?.totalPendapatan ?? 0;
+
+    final totalTransaksiHariIni = role == 'cashier'
+        ? cashierData?.totalTransaksi ?? 0
+        : summary?.totalTransaksi ?? 0;
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -130,16 +124,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     children: [
                       Row(
                         children: [
-                          const Icon(
-                            Icons.credit_card,
-                            color: Colors.redAccent,
-                            size: 18,
-                          ),
+                          const Icon(Icons.credit_card,
+                              color: Colors.redAccent, size: 18),
                           const SizedBox(width: 8),
-                          const Text(
+                          Text(
                             'Langganan',
-                            style: TextStyle(
-                              color: Colors.white,
+                            style: theme.textTheme.titleMedium?.copyWith(
                               fontSize: 15,
                               fontWeight: FontWeight.bold,
                             ),
@@ -152,7 +142,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      const Divider(color: Colors.white12),
+                      Divider(color: theme.dividerColor),
                       _infoRow('Plan', data?.plan ?? '-'),
                       _infoRow(
                         'Berakhir',
@@ -176,65 +166,86 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
             const SizedBox(height: 16),
 
-            /// ================= TOTAL PENJUALAN =================
             _statCard(
               icon: Icons.attach_money,
               title: 'Total Penjualan Hari Ini',
-              value: rupiah.format(
-                role == 'cashier'
-                    ? (cashierData?.totalPenjualan ?? 0)
-                    : (summary?.totalPendapatan ?? 0),
-              ),
+              value: rupiah.format(totalPenjualanHariIni),
             ),
-
             const SizedBox(height: 12),
 
-            /// ================= TRANSAKSI =================
             _statCard(
               icon: Icons.receipt_long,
               title: 'Transaksi Hari Ini',
-              value: role == 'cashier'
-                  ? (cashierData?.totalTransaksi ?? 0).toString()
-                  : (summary?.totalTransaksi ?? 0).toString(),
+              value: totalTransaksiHariIni.toString(),
             ),
+            const SizedBox(height: 12),
 
-            /// ================= OWNER / ADMIN ONLY =================
-            if (role != 'cashier') ...[
-              const SizedBox(height: 12),
-              _statCard(
-                icon: Icons.warning_amber_rounded,
-                title: 'Stok Menipis',
-                value: (summary?.stokMenipis.length ?? 0).toString(),
-              ),
-              const SizedBox(height: 12),
-              _statCard(
-                icon: Icons.inventory_2_outlined,
-                title: 'Total Produk',
-                value: (product?.totalProducts ?? 0).toString(),
-              ),
-            ],
+            _statCard(
+              icon: Icons.warning_amber_rounded,
+              title: 'Stok Menipis',
+              value: stokMenipis.toString(),
+            ),
+            const SizedBox(height: 12),
+
+            _statCard(
+              icon: Icons.inventory_2_outlined,
+              title: 'Total Produk',
+              value: totalProduk.toString(),
+            ),
           ],
         ),
       ),
     );
   }
 
-  /// ================= UI HELPERS =================
+  Future<void> _loadDashboard() async {
+    final prefs = await SharedPreferences.getInstance();
+    final storeId = prefs.getInt('store_id');
+    final token = prefs.getString('token');
+    final uid = prefs.getInt('user_id');
+    final userRole = await AuthService.getUserRole();
 
+    if (!mounted || storeId == null || token == null || token.isEmpty) return;
+
+    setState(() {
+      role = userRole;
+      userId = uid;
+    });
+
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day);
+    final end = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
+    final vm = ref.read(laporanViewModelProvider.notifier);
+    vm.state = LaporanState();
+
+    final futures = <Future>[
+      vm.fetchSummary(storeId: storeId, token: token, start: start, end: end),
+    ];
+
+    if (userRole == 'cashier') {
+      futures.add(
+        vm.fetchCashierReport(
+          storeId: storeId,
+          token: token,
+          start: start,
+          end: end,
+        ),
+      );
+    }
+
+    await Future.wait(futures);
+  }
+
+  /// ================= UI HELPERS =================
   Widget _card({required Widget child}) {
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF151515),
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white10),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.6),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        border: Border.all(color: theme.dividerColor),
       ),
       child: child,
     );
@@ -245,18 +256,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     required String title,
     required String value,
   }) {
+    final theme = Theme.of(context);
     return Container(
       height: 76,
       decoration: BoxDecoration(
-        color: const Color(0xFF151515),
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.6),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
       ),
       child: Row(
         children: [
@@ -264,7 +269,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             width: 4,
             decoration: const BoxDecoration(
               color: Colors.redAccent,
-              borderRadius: BorderRadius.horizontal(left: Radius.circular(16)),
+              borderRadius:
+                  BorderRadius.horizontal(left: Radius.circular(16)),
             ),
           ),
           const SizedBox(width: 12),
@@ -285,18 +291,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               children: [
                 Text(
                   title,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.6),
+                  style: theme.textTheme.bodySmall?.copyWith(
                     fontSize: 12,
+                    color:
+                        theme.textTheme.bodySmall?.color?.withOpacity(0.6),
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: theme.textTheme.bodyLarge?.copyWith(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
                   ),
@@ -310,6 +314,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Widget _infoRow(String label, String value, {Color? valueColor}) {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -317,18 +322,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           Expanded(
             child: Text(
               label,
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.5),
+              style: theme.textTheme.bodySmall?.copyWith(
                 fontSize: 12,
+                color:
+                    theme.textTheme.bodySmall?.color?.withOpacity(0.6),
               ),
             ),
           ),
           Text(
             value,
-            style: TextStyle(
-              color: valueColor ?? Colors.white,
+            style: theme.textTheme.bodySmall?.copyWith(
               fontSize: 12,
               fontWeight: FontWeight.w600,
+              color: valueColor ?? theme.textTheme.bodyLarge?.color,
             ),
           ),
         ],
@@ -356,12 +362,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Widget _skeleton(double height) {
-    return Container(
+    return ShimmerCard(
       height: height,
-      decoration: BoxDecoration(
-        color: Colors.white10,
-        borderRadius: BorderRadius.circular(16),
-      ),
+      borderRadius: BorderRadius.circular(16),
     );
   }
 

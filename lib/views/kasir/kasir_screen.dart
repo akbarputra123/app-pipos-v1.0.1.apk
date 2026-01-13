@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:kimpos/views/produk/usb_printer.dart';
-import 'package:shimmer/shimmer.dart';
 import 'package:collection/collection.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:kimpos/views/produk/widgets/usb_printer.dart';
 
 import '../../viewmodels/kelola_produk_viewmodel.dart';
 import '../../viewmodels/transaksi_viewmodel.dart';
-import 'card_produk.dart';
-import '../produk/search_produk.dart';
-import 'cart_produk.dart';
-import 'sukses.dart';
 import '../../config/theme.dart';
-import 'produk_scan.dart';
+
+import '../produk/widgets/search_produk.dart';
+import 'widgets/card_produk.dart';
+import 'widgets/cart_produk.dart';
+import 'widgets/produk_scan.dart';
+import 'widgets/sukses.dart';
 
 final selectedCategoryProvider = StateProvider<String>((ref) => 'ALL');
 
@@ -28,7 +29,9 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
   /// USB SCANNER STATE
   /// ===============================
   final FocusNode _scannerFocusNode = FocusNode();
-  String _scannedBarcode = "";
+  String _barcodeBuffer = '';
+  DateTime? _lastKeyTime;
+
   bool _usbDetected = false;
   bool _isCheckingUsb = false;
 
@@ -43,7 +46,6 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
 
   Future<void> _checkUsbScanner() async {
     if (_isCheckingUsb) return;
-
     setState(() => _isCheckingUsb = true);
 
     try {
@@ -59,27 +61,38 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
   }
 
   /// ===============================
-  /// HANDLE USB SCAN
+  /// HANDLE USB KEYBOARD SCAN
   /// ===============================
-  void _onUsbScan(RawKeyEvent event) {
-    if (event is RawKeyDownEvent) {
-      if (event.logicalKey == LogicalKeyboardKey.enter) {
-        if (_scannedBarcode.isNotEmpty) {
-          _handleBarcode(_scannedBarcode);
-          _scannedBarcode = "";
-        }
-        return;
-      }
+  KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
-      final char = event.character;
-      if (char != null && RegExp(r'[0-9]').hasMatch(char)) {
-        _scannedBarcode += char;
+    final char = event.character;
+    final now = DateTime.now();
+
+    _lastKeyTime ??= now;
+    if (now.difference(_lastKeyTime!).inMilliseconds > 80) {
+      _barcodeBuffer = '';
+    }
+    _lastKeyTime = now;
+
+    if (event.logicalKey == LogicalKeyboardKey.enter) {
+      if (_barcodeBuffer.length >= 5) {
+        _handleBarcode(_barcodeBuffer);
+        _barcodeBuffer = '';
+        return KeyEventResult.handled;
       }
     }
+
+    if (char != null && RegExp(r'[0-9]').hasMatch(char)) {
+      _barcodeBuffer += char;
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
   }
 
   /// ===============================
-  /// BARCODE → CART
+  /// BARCODE → CART (SELALU TAMBAH QTY)
   /// ===============================
   void _handleBarcode(String barcode) {
     final state = ref.read(kelolaProdukViewModelProvider);
@@ -90,24 +103,25 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
       return;
     }
 
-    if (produk.stock == 0) {
+    if (produk.stock <= 0) {
       _snack("Stok '${produk.name}' habis", Colors.redAccent);
       return;
     }
 
-    if (produk.qty > 0) {
-      _snack("Produk '${produk.name}' sudah ada di keranjang", Colors.orange);
-      return;
-    }
-
+    // 🔥 SETIAP SCAN / KLIK = TAMBAH QTY
     ref.read(kelolaProdukViewModelProvider.notifier).addToCart(produk);
-    _snack("✅ '${produk.name}' ditambahkan ke keranjang", Colors.green);
+
+    _snack("➕ ${produk.name}", Colors.green);
   }
 
   void _snack(String msg, Color color) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: color,
+        duration: const Duration(milliseconds: 700),
+      ),
+    );
   }
 
   @override
@@ -140,24 +154,23 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
 
     final filteredProduk = state.products.where((p) {
       final name = p.name.toLowerCase();
-      final cat = p.category?.toLowerCase() ?? "";
+      final cat = p.category?.toLowerCase() ?? '';
       return (name.contains(keyword) || cat.contains(keyword)) &&
           (selectedCategory == 'ALL' || p.category == selectedCategory);
     }).toList();
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: RawKeyboardListener(
-        focusNode: _scannerFocusNode,
+      body: Focus(
         autofocus: true,
-        onKey: _onUsbScan,
+        onKeyEvent: _onKeyEvent,
         child: LayoutBuilder(
           builder: (context, constraints) {
             final isTablet = constraints.maxWidth >= 900;
 
             /// ================= MOBILE =================
             if (!isTablet) {
-              return _buildMobileLayout(state, filteredProduk, categories);
+              return _buildContent(state, filteredProduk, categories);
             }
 
             /// ================= TABLET =================
@@ -165,7 +178,7 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
               children: [
                 Expanded(
                   flex: 3,
-                  child: _buildMobileLayout(state, filteredProduk, categories),
+                  child: _buildContent(state, filteredProduk, categories),
                 ),
                 Container(
                   width: 380,
@@ -178,9 +191,7 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
                       ),
                     ),
                   ),
-                  child: const CartProdukScreen(
-                    embedded: true, // nanti kita aktifkan
-                  ),
+                  child: const CartProdukScreen(embedded: true),
                 ),
               ],
             );
@@ -193,18 +204,21 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
     );
   }
 
-  Widget _buildMobileLayout(
+  /// ===============================
+  /// MAIN CONTENT
+  /// ===============================
+  Widget _buildContent(
     KelolaProdukState state,
     List filteredProduk,
     List<String> categories,
   ) {
-    if (state.isLoading) return _buildSkeleton();
+    if (state.isLoading) return _buildSkeleton(context);
 
     return Column(
       children: [
         const SizedBox(height: 16),
 
-        /// ================= HEADER =================
+        /// HEADER
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Column(
@@ -225,12 +239,10 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
                               builder: (_) => const ProdukScanScreen(),
                             ),
                           );
-
                           if (code != null && code.isNotEmpty) {
-                            _handleBarcode(code); // 🔥 TAMBAH KE KERANJANG
+                            _handleBarcode(code);
                           }
                         },
-
                         icon: const Icon(
                           Icons.qr_code_scanner,
                           color: Colors.white,
@@ -249,26 +261,26 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  _usbStatus(),
+                  _usbStatus(context),
                 ],
               ),
 
               const SizedBox(height: 16),
               _categoryDropdown(categories),
-
               const SizedBox(height: 12),
 
-              /// ===== LABEL + REFRESH (FIXED) =====
               Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  /// ===== LABEL DAFTAR PRODUK =====
                   Container(
                     decoration: BoxDecoration(
-                      color: AppColors.card,
+                      color: Theme.of(context).cardColor, // 🌗 ikut theme
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primary.withOpacity(0.35),
+                          color: AppColors.primary.withOpacity(
+                            0.35,
+                          ), // brand glow
                           blurRadius: 6,
                           offset: const Offset(0, 3),
                         ),
@@ -278,10 +290,9 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
                       horizontal: 12,
                       vertical: 6,
                     ),
-                    child: const Text(
+                    child: Text(
                       "Daftar Produk",
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
                       ),
@@ -290,27 +301,33 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
 
                   const Spacer(),
 
-                  Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withOpacity(0.35),
-                          blurRadius: 6,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: IconButton(
-                      tooltip: "Refresh",
-                      icon: const Icon(Icons.refresh, color: AppColors.primary),
-                      onPressed: () {
-                        ref.read(searchKeywordProvider.notifier).state = "";
-                        ref
-                            .read(kelolaProdukViewModelProvider.notifier)
-                            .getProduk();
-                      },
+                  /// ===== REFRESH BUTTON (MATCH STYLE) =====
+                  InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
+                      ref.read(searchKeywordProvider.notifier).state = '';
+                      ref
+                          .read(kelolaProdukViewModelProvider.notifier)
+                          .getProduk();
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardColor, // 🌗 ikut theme
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withOpacity(0.35),
+                            blurRadius: 6,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.all(8),
+                      child: const Icon(
+                        Icons.refresh,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
                     ),
                   ),
                 ],
@@ -321,12 +338,12 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
 
         const SizedBox(height: 8),
 
-        /// ================= LIST PRODUK (SCROLL) =================
+        /// LIST PRODUK
         Expanded(
           child: filteredProduk.isEmpty
               ? const Center(child: Text("Belum ada produk"))
               : ListView.builder(
-                  padding: EdgeInsets.zero, // 🔥 PENTING
+                  padding: EdgeInsets.zero,
                   itemCount: filteredProduk.length,
                   itemBuilder: (_, i) => CardProduk(produk: filteredProduk[i]),
                 ),
@@ -335,82 +352,129 @@ class _KasirScreenState extends ConsumerState<KasirScreen> {
     );
   }
 
-  Widget _usbStatus() {
+  Widget _usbStatus(BuildContext context) {
+    final theme = Theme.of(context);
+
     return GestureDetector(
       onTap: _checkUsbScanner,
       child: Container(
         height: 48,
         width: 48,
         decoration: BoxDecoration(
-          color: AppColors.card,
+          color: theme.cardColor, // 🌗 ikut light / dark
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Colors.redAccent, // 🔴 border merah
+            width: 1.6,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.redAccent.withOpacity(0.25),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
         child: _isCheckingUsb
             ? const Padding(
                 padding: EdgeInsets.all(10),
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.redAccent, // 🔴 loading merah
+                ),
               )
-            : Icon(Icons.usb, color: _usbDetected ? Colors.green : Colors.red),
+            : Icon(
+                Icons.usb,
+                size: 22,
+                color: _usbDetected
+                    ? Colors
+                          .green // ✅ USB terdeteksi
+                    : Colors.redAccent, // ❌ tidak terdeteksi
+              ),
       ),
     );
   }
 
   Widget _categoryDropdown(List<String> categories) {
     final selectedCategory = ref.watch(selectedCategoryProvider);
+    final theme = Theme.of(context);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: theme.cardColor, // 🌗 ikut light / dark
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.cardSoft, width: 1),
+        border: Border.all(
+          color: theme.dividerColor, // 🌗 border adaptif
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: theme.brightness == Brightness.dark
+                ? Colors.black.withOpacity(0.4)
+                : Colors.black.withOpacity(0.08),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: selectedCategory,
           isExpanded: true,
-          dropdownColor: AppColors.card,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
-          icon: const Icon(
-            Icons.keyboard_arrow_down,
-            color: AppColors.textPrimary,
-          ),
+
+          /// 🌗 dropdown ikut theme
+          dropdownColor: theme.cardColor,
+
+          /// 🌗 icon warna adaptif
+          icon: Icon(Icons.arrow_drop_down, color: theme.iconTheme.color),
+
+          /// 🌗 teks utama
+          style: theme.textTheme.bodyMedium,
+
           items: [
-            const DropdownMenuItem(value: 'ALL', child: Text("Semua Kategori")),
+            DropdownMenuItem<String>(
+              value: 'ALL',
+              child: Text("Semua Kategori", style: theme.textTheme.bodyMedium),
+            ),
             ...categories.map(
-              (c) => DropdownMenuItem(value: c, child: Text(c)),
+              (c) => DropdownMenuItem<String>(
+                value: c,
+                child: Text(c, style: theme.textTheme.bodyMedium),
+              ),
             ),
           ],
+
           onChanged: (v) {
-            if (v == null) return;
-            ref.read(selectedCategoryProvider.notifier).state = v;
+            if (v != null) {
+              ref.read(selectedCategoryProvider.notifier).state = v;
+            }
           },
         ),
       ),
     );
   }
 
-  Widget _buildSkeleton() {
+ Widget _buildSkeleton(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Shimmer.fromColors(
-      baseColor: AppColors.card,
-      highlightColor: Colors.white24,
+      baseColor: theme.cardColor,
+      highlightColor: theme.dividerColor.withOpacity(0.4),
       child: ListView.builder(
         itemCount: 6,
         itemBuilder: (_, __) => Container(
           margin: const EdgeInsets.all(12),
-          height: 100,
+          height: 100, // ⬅️ TETAP
           decoration: BoxDecoration(
-            color: AppColors.card,
+            color: theme.cardColor,
             borderRadius: BorderRadius.circular(16),
           ),
         ),
       ),
     );
   }
+
 
   Widget _cartButton(WidgetRef ref, BuildContext context) {
     final count = ref

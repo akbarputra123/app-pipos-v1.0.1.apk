@@ -12,7 +12,7 @@ enum FilterRange {
 }
 
 /// ===============================
-/// FILTER WAKTU WIDGET
+/// FILTER WAKTU WIDGET (THEME SAFE)
 /// ===============================
 class FilterWaktu extends StatelessWidget {
   final FilterRange active;
@@ -26,19 +26,21 @@ class FilterWaktu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Row(
       children: [
-        const Icon(
+        Icon(
           Icons.filter_alt_outlined,
           size: 14,
-          color: Colors.redAccent,
+          color: theme.colorScheme.primary,
         ),
         const SizedBox(width: 6),
         Text(
           "Filter Waktu",
-          style: TextStyle(
+          style: theme.textTheme.bodySmall?.copyWith(
             fontSize: 11,
-            color: Colors.white.withOpacity(0.7),
+            color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
           ),
         ),
         const SizedBox(width: 10),
@@ -50,11 +52,11 @@ class FilterWaktu extends StatelessWidget {
             physics: const BouncingScrollPhysics(),
             child: Row(
               children: [
-                _chip("Hari ini", FilterRange.today),
-                _chip("7 hari", FilterRange.last7Days),
-                _chip("30 hari", FilterRange.last30Days),
-                _chip("1 tahun", FilterRange.oneYear),
-                _chip("Semua", FilterRange.all),
+                _chip(context, "Hari ini", FilterRange.today),
+                _chip(context, "7 hari", FilterRange.last7Days),
+                _chip(context, "30 hari", FilterRange.last30Days),
+                _chip(context, "1 tahun", FilterRange.oneYear),
+                _chip(context, "Semua", FilterRange.all),
               ],
             ),
           ),
@@ -63,28 +65,37 @@ class FilterWaktu extends StatelessWidget {
     );
   }
 
-  Widget _chip(String text, FilterRange value) {
+  Widget _chip(BuildContext context, String text, FilterRange value) {
+    final theme = Theme.of(context);
     final isActive = value == active;
 
-    return GestureDetector(
+    final Color activeBg = theme.colorScheme.primary;
+    final Color inactiveBg = theme.cardColor;
+    final Color borderColor = isActive
+        ? theme.colorScheme.primary
+        : theme.dividerColor;
+
+    final Color textColor = isActive
+        ? theme.colorScheme.onPrimary
+        : theme.textTheme.bodyMedium!.color!;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
       onTap: () => onChanged(value),
       child: Container(
         margin: const EdgeInsets.only(right: 6),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: isActive
-              ? const Color(0xFFE53935)
-              : const Color(0xFF1C1C1C),
+          color: isActive ? activeBg : inactiveBg,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.05),
-          ),
+          border: Border.all(color: borderColor),
         ),
         child: Text(
           text,
-          style: const TextStyle(
+          style: theme.textTheme.bodySmall?.copyWith(
             fontSize: 10,
-            color: Colors.white,
+            fontWeight: FontWeight.w600,
+            color: textColor,
           ),
         ),
       ),

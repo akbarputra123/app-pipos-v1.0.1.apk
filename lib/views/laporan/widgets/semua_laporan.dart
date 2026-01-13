@@ -14,30 +14,26 @@ class SemuaLaporan extends ConsumerWidget {
       decimalDigits: 0,
     ).format(value);
   }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
     final summary = ref.watch(laporanViewModelProvider).summary;
 
     if (summary == null) {
       return const SizedBox.shrink();
     }
-
     final totalTransaksi = summary.totalTransaksi;
     final pendapatan = summary.totalPendapatan;
- 
     final bersih = summary.netRevenue;
     final hpp = summary.totalHpp;
     final labaKotor = summary.grossProfit;
-    // final labaBersih = summary.netProfit;
-    // final margin = summary.margin;
 
-    final avgPerTransaksi =
-        totalTransaksi > 0 ? (pendapatan / totalTransaksi) : 0;
-
+    final avgPerTransaksi = totalTransaksi > 0
+        ? (pendapatan / totalTransaksi)
+        : 0;
     return Column(
       children: [
-        /// ================= GRID 2 KOLOM =================
+        /// ================= GRID =================
         GridView(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -56,13 +52,12 @@ class SemuaLaporan extends ConsumerWidget {
               icon: Icons.bar_chart,
               iconColor: Colors.teal,
             ),
-            
             _LaporanCard(
               title: 'Pendapatan Bersih',
               value: _rupiah(bersih),
               subtitle: 'Setelah diskon',
               icon: Icons.account_balance_wallet,
-              iconColor: Colors.greenAccent,
+              iconColor: Colors.green,
               highlight: true,
             ),
             _LaporanCard(
@@ -77,22 +72,14 @@ class SemuaLaporan extends ConsumerWidget {
               value: _rupiah(labaKotor),
               subtitle: 'Pendapatan - HPP',
               icon: Icons.trending_up,
-              iconColor: Colors.green,
+              iconColor: Colors.greenAccent,
             ),
-            // _LaporanCard(
-            //   title: 'Laba Bersih',
-            //   value: _rupiah(labaBersih),
-            //   subtitle: 'Margin $margin',
-            //   icon: Icons.savings,
-            //   iconColor: Colors.green,
-            // ),
           ],
         ),
 
-
-
         const SizedBox(height: 12),
-        /// ================= FULL WIDTH CARD =================
+
+        /// ================= FULL WIDTH =================
         _LaporanCard(
           title: 'Rata-rata Transaksi',
           value: _rupiah(avgPerTransaksi),
@@ -128,15 +115,17 @@ class _LaporanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Container(
       margin: isWide ? EdgeInsets.zero : null,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1E),
+        color: theme.cardColor, // ✅ theme aware
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: highlight ? Colors.redAccent : Colors.transparent,
-          width: 1,
+          color: highlight ? theme.colorScheme.primary : theme.dividerColor,
+          width: highlight ? 1.5 : 1,
         ),
       ),
       child: Column(
@@ -149,9 +138,9 @@ class _LaporanCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
-                    color: Colors.white70,
+                  style: theme.textTheme.bodySmall?.copyWith(
                     fontSize: 11,
+                    color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
                   ),
                 ),
               ),
@@ -160,17 +149,15 @@ class _LaporanCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
+            style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),
           ),
           Text(
             subtitle,
-            style: const TextStyle(
-              color: Colors.white38,
+            style: theme.textTheme.bodySmall?.copyWith(
               fontSize: 10,
+              color: theme.textTheme.bodySmall?.color?.withOpacity(0.5),
             ),
           ),
         ],

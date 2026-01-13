@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'line_chart_widget.dart';
 
 class DashboardCard extends StatelessWidget {
   final String title;
@@ -6,6 +7,7 @@ class DashboardCard extends StatelessWidget {
   final IconData icon;
   final Color valueColor;
   final Color? borderColor;
+  final List<double>? chartData;
 
   const DashboardCard({
     super.key,
@@ -14,61 +16,70 @@ class DashboardCard extends StatelessWidget {
     required this.icon,
     required this.valueColor,
     this.borderColor,
+    this.chartData,
   });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+
       decoration: BoxDecoration(
-        color: const Color(0xFF141414),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: borderColor ?? Colors.white.withOpacity(0.06),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.6),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: borderColor ?? theme.dividerColor),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          /// ===== HEADER =====
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                icon,
-                size: 16,
-                color: valueColor,
+              /// HEADER
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Icon(icon, size: 10, color: valueColor),
+                  Text(
+                    title,
+                    style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
+                  ),
+                ],
               ),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.white.withOpacity(0.45),
+
+              /// VALUE
+             RichText(
+  text: TextSpan(
+    children: [
+      TextSpan(
+        text: 'Rp ',
+        style: theme.textTheme.bodySmall?.copyWith(
+          fontSize: 10, // 🔥 kecil
+          color: valueColor.withOpacity(0.9),
+        ),
+      ),
+      TextSpan(
+        text: value.replaceAll('Rp ', ''),
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontSize: 10, // 🔥 fokus ke angka
+          fontWeight: FontWeight.w600,
+          color: valueColor,
+        ),
+      ),
+    ],
+  ),
+),
+              const SizedBox(height: 6),
+
+              /// GRAFIK (ADAPTIF)
+              if (chartData != null)
+                Expanded(
+                  child: MiniLineChart(color: valueColor, data: chartData!),
                 ),
-              ),
             ],
-          ),
-
-          const Spacer(),
-
-          /// ===== VALUE =====
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: valueColor,
-            ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }

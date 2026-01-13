@@ -1,9 +1,11 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../viewmodels/auth_viewmodel.dart';
-import '../shared/base_sidebar.dart';
 import '../../viewmodels/kelola_user_viewmodel.dart';
+import '../shared/base_sidebar.dart';
+import '../pilih toko/pilih_toko.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -13,94 +15,117 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  // ===== THEME =====
-  static const Color kBg = Color(0xFF160808);
-  static const Color kPrimary = Color(0xFFE43636);
-  static const Color kParagraph = Color(0xFF818386);
-
   final TextEditingController identifierController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+
   bool obscurePassword = true;
 
-  InputDecoration _inputDecoration(String hint, {Widget? suffix}) {
+  /// ================= INPUT DECORATION (THEME AWARE) =================
+  InputDecoration _inputDecoration(
+    BuildContext context,
+    String hint, {
+    Widget? suffix,
+  }) {
+    final theme = Theme.of(context);
+
     return InputDecoration(
       hintText: hint,
-      hintStyle: TextStyle(color: kParagraph.withOpacity(0.8)),
+      hintStyle: TextStyle(
+        color: theme.textTheme.bodySmall?.color?.withOpacity(0.6),
+      ),
       filled: true,
-      fillColor: const Color(0xFF120909).withOpacity(0.85),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      fillColor: theme.cardColor.withOpacity(0.85),
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.12)),
+        borderSide:
+            BorderSide(color: theme.dividerColor.withOpacity(0.6)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: kPrimary, width: 1.4),
+        borderSide: BorderSide(
+          color: theme.colorScheme.primary,
+          width: 1.4,
+        ),
       ),
       suffixIcon: suffix,
     );
   }
 
-  void _login() async {
-    final username = identifierController.text.trim();
+  /// ================= LOGIN HANDLER =================
+  Future<void> _login() async {
+    final identifier = identifierController.text.trim();
     final password = passwordController.text.trim();
 
     await ref
         .read(authViewModelProvider.notifier)
-        .login(identifier: username, password: password);
+        .login(identifier: identifier, password: password);
 
     final state = ref.read(authViewModelProvider);
 
-    if (state.authResponse == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('email/username/password salah')),
-      );
-      return;
-    }
-
-    if (state.authResponse!.success != true) {
+    if (state.authResponse == null || state.authResponse!.success != true) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(state.errorMessage ?? 'Login gagal')),
       );
       return;
     }
 
-    // 🔥 RESET DATA USER SAAT LOGIN BERHASIL
+    // reset cache user
     ref.read(kelolaUserViewModelProvider.notifier).reset();
 
     final role = state.authResponse!.user!.role;
 
-    Navigator.pushReplacement(
-  context,
-  MaterialPageRoute(
-    builder: (_) => BaseSidebar(role: role),
-  ),
-);
-
+    if (role == 'owner') {
+      /// 🔥 POPUP PILIH TOKO (DI ATAS LOGIN)
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const PilihTokoDialog(),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BaseSidebar(role: role),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final authState = ref.watch(authViewModelProvider);
 
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+    final bool isDark = theme.brightness == Brightness.dark;
 
+    return Scaffold(
       body: SafeArea(
         child: Stack(
           children: [
-            // BACKGROUND
+            /// ================= BACKGROUND =================
             Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [kBg, Color(0xFF100606), kBg],
+                  colors: isDark
+                      ? const [
+                          Color(0xFF160808),
+                          Color(0xFF100606),
+                          Color(0xFF160808),
+                        ]
+                      : [
+                          theme.colorScheme.primary.withOpacity(0.08),
+                          theme.scaffoldBackgroundColor,
+                          theme.scaffoldBackgroundColor,
+                        ],
                 ),
               ),
             ),
 
-            // RED GLOW
+            /// ================= RED GLOW =================
             Align(
               alignment: const Alignment(0, -0.9),
               child: Container(
@@ -108,11 +133,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 height: 240,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: kPrimary.withOpacity(0.12),
+                  color: theme.colorScheme.primary.withOpacity(0.18),
                 ),
               ),
             ),
 
+            /// ================= LOGIN CARD =================
             Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(18),
@@ -123,120 +149,78 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                       child: Container(
-                        padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+                        padding: const EdgeInsets.all(22),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.45),
+                          color: theme.cardColor.withOpacity(0.9),
                           borderRadius: BorderRadius.circular(22),
                           border: Border.all(
-                            color: kPrimary.withOpacity(0.55),
-                            width: 1.2,
+                            color: theme.colorScheme.primary.withOpacity(0.6),
                           ),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // LOGO
-                            Center(
-                              child: Column(
-                                children: [
-                                  Container(
-                                    width: 64,
-                                    height: 64,
-                                    decoration: const BoxDecoration(
-                                      color: Colors.white,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Container(
-                                      width: 40,
-                                      height: 40,
-                                      padding: const EdgeInsets.all(2),
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: const Color(
-                                            0xFF8B0000,
-                                          ), // merah gelap
-                                          width: 1.5,
-                                        ),
-                                      ),
-                                      child: ClipOval(
-                                        child: Image.asset(
-                                          'assets/images/logo1.jpeg',
-                                          fit: BoxFit.cover,
-                                        ),
-                                      ),
+                            /// ================= LOGO =================
+                            Column(
+                              children: [
+                                Container(
+                                  width: 64,
+                                  height: 64,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                  child: ClipOval(
+                                    child: Image.asset(
+                                      'assets/images/logo1.jpeg',
+                                      fit: BoxFit.cover,
                                     ),
                                   ),
-                                  const SizedBox(height: 12),
-                                  const Text(
-                                    'PIPos',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 30,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Point of Sales',
-                                    style: TextStyle(
-                                      color: kParagraph,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'PIPos',
+                                  style: theme.textTheme.headlineSmall
+                                      ?.copyWith(fontWeight: FontWeight.w900),
+                                ),
+                                Text(
+                                  'Point of Sales',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ],
                             ),
 
                             const SizedBox(height: 24),
 
-                            // IDENTIFIER
-                            const Text(
-                              'Email atau Username',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
+                            /// ================= IDENTIFIER =================
+                            Text('Email atau Username',
+                                style: theme.textTheme.bodyMedium),
                             const SizedBox(height: 8),
                             TextField(
                               controller: identifierController,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
-                              decoration: _inputDecoration('Email / Username'),
+                              style: theme.textTheme.bodyLarge,
+                              decoration:
+                                  _inputDecoration(context, 'Email / Username'),
                             ),
 
                             const SizedBox(height: 16),
 
-                            // PASSWORD
-                            const Text(
-                              'Password',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
+                            /// ================= PASSWORD =================
+                            Text('Password',
+                                style: theme.textTheme.bodyMedium),
                             const SizedBox(height: 8),
                             TextField(
                               controller: passwordController,
                               obscureText: obscurePassword,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
+                              style: theme.textTheme.bodyLarge,
                               decoration: _inputDecoration(
+                                context,
                                 'Password',
                                 suffix: IconButton(
                                   icon: Icon(
                                     obscurePassword
                                         ? Icons.visibility
                                         : Icons.visibility_off,
-                                    color: Colors.white70,
                                   ),
                                   onPressed: () {
                                     setState(() {
@@ -247,17 +231,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ),
                             ),
 
-                          
+                            const SizedBox(height: 20),
 
-                            const SizedBox(height: 16),
-
-                            // BUTTON
+                            /// ================= BUTTON =================
                             SizedBox(
                               height: 50,
                               child: ElevatedButton(
-                                onPressed: authState.isLoading ? null : _login,
+                                onPressed:
+                                    authState.isLoading ? null : _login,
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: kPrimary,
+                                  backgroundColor:
+                                      theme.colorScheme.primary,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(14),
                                   ),
@@ -271,7 +255,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                         'Masuk',
                                         style: TextStyle(
                                           fontSize: 16,
-                                          fontWeight: FontWeight.w800,color: Colors.white
+                                          fontWeight: FontWeight.w800,
+                                          color: Colors.white
                                         ),
                                       ),
                               ),
@@ -282,10 +267,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             Text(
                               'v1.0.0 • Secure Login',
                               textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: kParagraph.withOpacity(0.6),
-                                fontSize: 11,
-                              ),
+                              style: theme.textTheme.bodySmall,
                             ),
                           ],
                         ),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// =======================================================
-/// CARD PRODUK (SCROLLABLE + EDIT/HAPUS)
+/// CARD PRODUK (THEME AWARE, FIX HEIGHT)
 /// =======================================================
 class CardProduk extends StatelessWidget {
   final String title;
@@ -17,28 +17,27 @@ class CardProduk extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Container(
-      constraints: const BoxConstraints(
-        maxHeight: 300, // ⬅️ tinggi card tetap (AMAN GRID)
-      ),
+      height: 150,
       decoration: BoxDecoration(
-        color: const Color(0xFF151515),
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.05),
-        ),
+        border: Border.all(color: theme.dividerColor.withOpacity(0.4)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.5),
+            color: theme.shadowColor.withOpacity(
+              theme.brightness == Brightness.dark ? 0.6 : 0.2,
+            ),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          /// ===== HEADER =====
+          /// ================= HEADER =================
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
             child: Row(
@@ -46,7 +45,7 @@ class CardProduk extends StatelessWidget {
                 Icon(
                   titleIcon,
                   size: 14,
-                  color: Colors.redAccent,
+                  color: theme.colorScheme.primary,
                 ),
                 const SizedBox(width: 6),
                 Expanded(
@@ -54,10 +53,9 @@ class CardProduk extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: theme.textTheme.bodySmall?.copyWith(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white,
                     ),
                   ),
                 ),
@@ -67,18 +65,18 @@ class CardProduk extends StatelessWidget {
 
           Divider(
             height: 1,
-            color: Colors.white.withOpacity(0.06),
+            color: theme.dividerColor,
           ),
 
-          /// ===== LIST PRODUK (SCROLLABLE) =====
+          /// ================= LIST =================
           Expanded(
             child: items.isEmpty
                 ? Center(
                     child: Text(
                       'Tidak ada data',
-                      style: TextStyle(
+                      style: theme.textTheme.bodySmall?.copyWith(
                         fontSize: 10,
-                        color: Colors.white.withOpacity(0.4),
+                        color: theme.textTheme.bodySmall?.color?.withOpacity(0.5),
                       ),
                     ),
                   )
@@ -100,7 +98,7 @@ class CardProduk extends StatelessWidget {
 }
 
 /// =======================================================
-/// ITEM PRODUK (ULTRA COMPACT - AMAN GRID)
+/// ITEM PRODUK (THEME AWARE)
 /// =======================================================
 class _ProdukItemTile extends StatelessWidget {
   final ProdukItem item;
@@ -109,58 +107,60 @@ class _ProdukItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final isCritical = item.isCritical;
 
+    final Color bgColor = isCritical
+        ? theme.colorScheme.error.withOpacity(0.12)
+        : theme.colorScheme.surface;
+
+    final Color borderColor = isCritical
+        ? theme.colorScheme.error.withOpacity(0.4)
+        : theme.dividerColor.withOpacity(0.5);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: isCritical
-            ? const Color(0xFF2A1515)
-            : const Color(0xFF1C1C1C),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isCritical
-              ? Colors.redAccent.withOpacity(0.35)
-              : Colors.white.withOpacity(0.05),
-        ),
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
       ),
       child: Row(
         children: [
-          /// ICON (LEBIH KECIL)
+          /// ICON
           Container(
-            width: 22,
-            height: 22,
+            width: 34,
+            height: 34,
             decoration: BoxDecoration(
-              color: Colors.redAccent.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(5),
+              color: theme.colorScheme.primary.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.inventory_2,
-              size: 14,
-              color: Colors.redAccent,
+              size: 20,
+              color: theme.colorScheme.primary,
             ),
           ),
 
-          const SizedBox(width: 6),
+          const SizedBox(width: 12),
 
-          /// INFO (SUPER COMPACT)
+          /// INFO
           Expanded(
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   item.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 10,     // ⬅️ lebih kecil
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                    height: 1.1,
+                    height: 1.25,
                   ),
                 ),
-                const SizedBox(height: 1),
+                const SizedBox(height: 4),
                 Row(
                   children: [
                     Expanded(
@@ -168,30 +168,31 @@ class _ProdukItemTile extends StatelessWidget {
                         'Stok ${item.stock}/${item.minStock}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 8.5, // ⬅️ lebih kecil
-                          height: 1.1,
-                          color: Colors.white.withOpacity(0.55),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 11,
+                          height: 1.2,
+                          color: theme.textTheme.bodySmall?.color
+                              ?.withOpacity(0.65),
                         ),
                       ),
                     ),
                     if (isCritical)
                       Container(
-                        margin: const EdgeInsets.only(left: 4),
+                        margin: const EdgeInsets.only(left: 6),
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 1,
+                          horizontal: 8,
+                          vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.redAccent.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(4),
+                          color: theme.colorScheme.error.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
                         ),
-                        child: const Text(
-                          'K',
-                          style: TextStyle(
-                            fontSize: 8,  // ⬅️ kecil
+                        child: Text(
+                          'KRITIS',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            fontSize: 10,
                             height: 1,
-                            color: Colors.redAccent,
+                            color: theme.colorScheme.error,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -202,19 +203,29 @@ class _ProdukItemTile extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(width: 4),
-
-          /// ACTIONS (KECIL)
-       
+          /// ACTIONS
+          if (item.onEdit != null) ...[
+            const SizedBox(width: 8),
+            _ActionIcon(
+              icon: Icons.edit,
+              onTap: item.onEdit,
+            ),
+          ],
+          if (item.onDelete != null) ...[
+            const SizedBox(width: 6),
+            _ActionIcon(
+              icon: Icons.delete,
+              onTap: item.onDelete,
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-
 /// =======================================================
-/// ACTION ICON
+/// ACTION ICON (THEME AWARE)
 /// =======================================================
 class _ActionIcon extends StatelessWidget {
   final IconData icon;
@@ -227,19 +238,21 @@ class _ActionIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return InkWell(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(8),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(5),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(6),
+          color: theme.colorScheme.surfaceVariant.withOpacity(0.4),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(
           icon,
-          size: 14,
-          color: Colors.white,
+          size: 18,
+          color: theme.iconTheme.color,
         ),
       ),
     );

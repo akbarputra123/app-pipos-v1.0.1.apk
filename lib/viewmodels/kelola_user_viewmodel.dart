@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/kelola_user.dart';
 import '../services/kelola_user_service.dart';
-
+import 'package:dio/dio.dart'; // 🔥 WAJIB
 /// =====================
 /// STATE
 /// =====================
@@ -63,18 +63,35 @@ class KelolaUserViewModel extends StateNotifier<KelolaUserState> {
   /// =====================
   /// CREATE
   /// =====================
-  Future<bool> createUser(KelolaUser user) async {
-    try {
-      final success = await KelolaUserService.createUser(user);
-      if (success) {
-        await getUsers(force: true);
-      }
-      return success;
-    } catch (e) {
-      state = state.copyWith(errorMessage: e.toString());
-      return false;
+ Future<bool> createUser(KelolaUser user) async {
+  try {
+    final success = await KelolaUserService.createUser(user);
+
+    if (success) {
+      await getUsers(force: true);
     }
+
+    return success;
+  } on DioException catch (e) {
+    String message = 'Gagal menambahkan user';
+
+    // 🔥 Ambil pesan dari backend (status 400, 409, dll)
+    if (e.response != null) {
+      final data = e.response?.data;
+
+      if (data is Map && data['message'] != null) {
+        message = data['message'];
+      }
+    }
+
+    state = state.copyWith(errorMessage: message);
+    return false;
+  } catch (e) {
+    state = state.copyWith(errorMessage: e.toString());
+    return false;
   }
+}
+
 
   /// =====================
   /// UPDATE

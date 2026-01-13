@@ -84,7 +84,7 @@ class MainActivity : FlutterActivity() {
                     }
 
                     // =================================================
-                    // PRINT BARCODE (TSPL - LABEL)
+                    // PRINT BARCODE (TSPL)
                     // =================================================
                     "printBarcodeWithName" -> {
                         val name = call.argument<String>("name") ?: ""
@@ -101,15 +101,14 @@ class MainActivity : FlutterActivity() {
                         }
 
                         Thread {
-                            val success = printTsplLabel(device, name, barcode)
-                            Log.d(TAG, "TSPL Print success: $success")
+                            printTsplLabel(device, name, barcode)
                         }.start()
 
                         result.success(true)
                     }
 
                     // =================================================
-                    // PRINT RECEIPT (ESC/POS - STRUK)
+                    // PRINT RECEIPT (ESC/POS)
                     // =================================================
                     "printReceipt" -> {
                         val text = call.argument<String>("text") ?: ""
@@ -125,8 +124,29 @@ class MainActivity : FlutterActivity() {
                         }
 
                         Thread {
-                            val success = printEscPos(device, text)
-                            Log.d(TAG, "ESC/POS Print success: $success")
+                            printEscPos(device, text)
+                        }.start()
+
+                        result.success(true)
+                    }
+
+                    // =================================================
+                    // OPEN CASH DRAWER (ESC/POS)
+                    // =================================================
+                    "openCashDrawer" -> {
+                        val deviceName = call.argument<String>("deviceName") ?: ""
+
+                        val device = usbManager.deviceList.values.firstOrNull {
+                            deviceName.startsWith(it.deviceName)
+                        }
+
+                        if (device == null || !usbManager.hasPermission(device)) {
+                            result.success(false)
+                            return@setMethodCallHandler
+                        }
+
+                        Thread {
+                            openCashDrawer(device)
                         }.start()
 
                         result.success(true)
@@ -144,13 +164,9 @@ class MainActivity : FlutterActivity() {
     }
 
     // =================================================
-    // TSPL PRINT (BARCODE / LABEL)
+    // TSPL PRINT
     // =================================================
-    private fun printTsplLabel(
-        device: UsbDevice,
-        name: String,
-        barcode: String
-    ): Boolean {
+    private fun printTsplLabel(device: UsbDevice, name: String, barcode: String): Boolean {
         return try {
             val usbManager = getSystemService(USB_SERVICE) as UsbManager
             val connection = usbManager.openDevice(device) ?: return false
@@ -161,12 +177,11 @@ class MainActivity : FlutterActivity() {
             val endpoint = findBulkOutEndpoint(intf) ?: return false
             val data = buildTsplLabel(name, barcode)
 
-            val sent = connection.bulkTransfer(endpoint, data, data.size, 5000)
+            connection.bulkTransfer(endpoint, data, data.size, 5000)
 
             connection.releaseInterface(intf)
             connection.close()
-
-            sent > 0
+            true
         } catch (e: Exception) {
             Log.e(TAG, "TSPL error: ${e.message}")
             false
@@ -174,12 +189,9 @@ class MainActivity : FlutterActivity() {
     }
 
     // =================================================
-    // ESC/POS PRINT (RECEIPT TEXT)
+    // ESC/POS PRINT
     // =================================================
-    private fun printEscPos(
-        device: UsbDevice,
-        text: String
-    ): Boolean {
+    private fun printEscPos(device: UsbDevice, text: String): Boolean {
         return try {
             val usbManager = getSystemService(USB_SERVICE) as UsbManager
             val connection = usbManager.openDevice(device) ?: return false
@@ -194,10 +206,37 @@ class MainActivity : FlutterActivity() {
 
             connection.releaseInterface(intf)
             connection.close()
-
             true
         } catch (e: Exception) {
             Log.e(TAG, "ESC/POS error: ${e.message}")
+            false
+        }
+    }
+
+    // =================================================
+    // OPEN CASH DRAWER
+    // =================================================
+    private fun openCashDrawer(device: UsbDevice): Boolean {
+        return try {
+            val usbManager = getSystemService(USB_SERVICE) as UsbManager
+            val connection = usbManager.openDevice(device) ?: return false
+
+            val intf = findBulkInterface(device) ?: return false
+            connection.claimInterface(intf, true)
+
+            val endpoint = findBulkOutEndpoint(intf) ?: return false
+
+            val cmd = byteArrayOf(
+                0x1B, 0x70, 0x00, 0x19.toByte(), 0xFA.toByte()
+            )
+
+            connection.bulkTransfer(endpoint, cmd, cmd.size, 3000)
+
+            connection.releaseInterface(intf)
+            connection.close()
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Drawer error: ${e.message}")
             false
         }
     }
@@ -220,8 +259,7 @@ class MainActivity : FlutterActivity() {
     private fun findBulkOutEndpoint(intf: UsbInterface): UsbEndpoint? {
         for (i in 0 until intf.endpointCount) {
             val ep = intf.getEndpoint(i)
-            if (
-                ep.type == UsbConstants.USB_ENDPOINT_XFER_BULK &&
+            if (ep.type == UsbConstants.USB_ENDPOINT_XFER_BULK &&
                 ep.direction == UsbConstants.USB_DIR_OUT
             ) {
                 return ep
@@ -230,45 +268,18 @@ class MainActivity : FlutterActivity() {
         return null
     }
 
-    // =================================================
-    // TSPL LABEL BUILDER (AMAN - TIDAK PENGARUH STRUK)
-    // =================================================
-    private fun buildTsplLabel(
-        name: String,
-        barcode: String
-    ): ByteArray {
-
+    private fun buildTsplLabel(name: String, barcode: String): ByteArray {
         val productName = name.take(16)
 
         fun slot(x: Int, y: Int): String = buildString {
-            val barcodeWidth = 240
-            val textX = x + (barcodeWidth / 2) - 20
-
-            append(
-                "BARCODE $x,$y,\"128\",75,1,0,2,2,\"$barcode\"\r\n"
-            )
-            append(
-                "TEXT $textX,${y + 120},\"2\",0,1,1,\"$productName\"\r\n"
-            )
+            append("BARCODE $x,$y,\"128\",75,1,0,2,2,\"$barcode\"\r\n")
+            append("TEXT ${x + 80},${y + 120},\"2\",0,1,1,\"$productName\"\r\n")
         }
 
         val cmd =
             "SIZE 800,1200\r\n" +
-            "GAP 0,0\r\n" +
-            "DENSITY 7\r\n" +
-            "SPEED 4\r\n" +
-            "DIRECTION 1\r\n" +
             "CLS\r\n" +
-
             slot(60, 40) +
-            slot(430, 40) +
-            slot(60, 320) +
-            slot(430, 320) +
-            slot(60, 600) +
-            slot(430, 600) +
-            slot(60, 880) +
-            slot(430, 880) +
-
             "PRINT 1,1\r\n"
 
         return cmd.toByteArray(Charsets.US_ASCII)

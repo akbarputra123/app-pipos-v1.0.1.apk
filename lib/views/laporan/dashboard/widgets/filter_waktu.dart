@@ -12,6 +12,8 @@ class FilterWaktu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     final List<String> filters = [
       "Hari ini",
       "7 hari",
@@ -22,20 +24,22 @@ class FilterWaktu extends StatelessWidget {
 
     return Row(
       children: [
-        const Icon(
+        Icon(
           Icons.filter_alt_outlined,
           size: 14,
-          color: Colors.redAccent,
+          color: theme.colorScheme.primary, // ✅ theme aware
         ),
         const SizedBox(width: 6),
         Text(
           "Filter Waktu",
-          style: TextStyle(
+          style: theme.textTheme.bodySmall?.copyWith(
             fontSize: 11,
-            color: Colors.white.withOpacity(0.7),
+            color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
           ),
         ),
         const SizedBox(width: 10),
+
+        /// ================= FILTER CHIPS =================
         Expanded(
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -55,18 +59,24 @@ class FilterWaktu extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: active
-                          ? const Color(0xFFE53935)
-                          : const Color(0xFF1C1C1C),
+                          ? theme.colorScheme.primary
+                          : theme.cardColor,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: Colors.white.withOpacity(0.05),
+                        color: active
+                            ? theme.colorScheme.primary
+                            : theme.dividerColor,
                       ),
                     ),
                     child: Text(
                       filters[index],
-                      style: const TextStyle(
+                      style: theme.textTheme.bodySmall?.copyWith(
                         fontSize: 10,
-                        color: Colors.white,
+                        fontWeight:
+                            active ? FontWeight.w600 : FontWeight.w400,
+                        color: active
+                            ? theme.colorScheme.onPrimary
+                            : theme.textTheme.bodySmall?.color,
                       ),
                     ),
                   ),

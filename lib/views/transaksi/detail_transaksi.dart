@@ -10,6 +10,8 @@ class DetailTransaksiPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+
     final currency = NumberFormat.currency(
       locale: 'id_ID',
       symbol: 'Rp ',
@@ -19,22 +21,17 @@ class DetailTransaksiPage extends ConsumerWidget {
     double totalDiskon = 0;
 
     for (final item in transaksi.items) {
-      // ===== DISKON PERSENTASE =====
       if (item.discountType == 'percentage' && item.discountValue != null) {
         totalDiskon +=
             (item.price * item.quantity) * (item.discountValue! / 100);
       }
 
-      // ===== DISKON BUY X GET Y (PAKAI BACKEND) =====
       if (item.discountType == 'buyxgety' &&
           item.notes != null &&
           item.notes!.contains('|')) {
         final parts = item.notes!.split('|');
-
-        // notes = "lineTotal|discountAmount"
         if (parts.length == 2) {
-          final discountAmount = double.tryParse(parts[1]) ?? 0;
-          totalDiskon += discountAmount;
+          totalDiskon += double.tryParse(parts[1]) ?? 0;
         }
       }
     }
@@ -45,13 +42,12 @@ class DetailTransaksiPage extends ConsumerWidget {
         final lineTotal = double.tryParse(parts[0]);
         if (lineTotal != null) return lineTotal;
       }
-
       return item.price * item.quantity;
     }
 
-    String _itemSubtitle(item, NumberFormat currency) {
+    String _itemSubtitle(item) {
       if (item.discountType == 'buyxgety') {
-        return "${item.quantity} x ${currency.format(item.price)} ";
+        return "${item.quantity} x ${currency.format(item.price)}";
       }
 
       if (item.discountType == 'percentage' && item.discountValue != null) {
@@ -63,184 +59,152 @@ class DetailTransaksiPage extends ConsumerWidget {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0E0E0E),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF121212),
+        backgroundColor: theme.appBarTheme.backgroundColor,
         elevation: 0,
         centerTitle: true,
         title: const Text("Detail Transaksi"),
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(2),
-          child: Divider(height: 2, thickness: 2, color: Colors.redAccent),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(2),
+          child: Divider(
+            height: 2,
+            thickness: 2,
+            color: theme.colorScheme.primary,
+          ),
         ),
       ),
-      body: Column(
+      body: ListView(
+        padding: const EdgeInsets.all(16),
         children: [
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                _infoCard("No. Transaksi", transaksi.transactionId ?? "-"),
-                _infoCard("Tanggal & Waktu", transaksi.createdAt ?? "-"),
-                _infoCard(
-                  "Metode Pembayaran",
-                  transaksi.paymentMethod.toLowerCase(),
-                ),
-                const SizedBox(height: 14),
-                _card(
-                  title: "Item Pembelian",
+          _infoCard(theme, "No. Transaksi", transaksi.transactionId ?? "-"),
+          _infoCard(theme, "Tanggal & Waktu", transaksi.createdAt ?? "-"),
+          _infoCard(
+            theme,
+            "Metode Pembayaran",
+            transaksi.paymentMethod.toLowerCase(),
+          ),
+
+          const SizedBox(height: 14),
+
+          _card(
+            theme,
+            title: "Item Pembelian",
+            child: Column(
+              children: transaksi.items.map((item) {
+                final itemTotal = _calculateItemTotal(item);
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
                   child: Column(
-                    children: transaksi.items.map((item) {
-                      final itemTotal = _calculateItemTotal(item);
-
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            /// ================= NAMA PRODUK =================
-                            Text(
-                              item.name,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 15,
-                              ),
-                            ),
-
-                            const SizedBox(height: 4),
-
-                            /// ================= QTY x PRICE + PROMO =================
-                            Text(
-                              _itemSubtitle(item, currency),
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
-                              ),
-                            ),
-
-                            const SizedBox(height: 6),
-
-                            /// ================= TOTAL ITEM =================
-                            Text(
-                              currency.format(itemTotal),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                              ),
-                            ),
-
-                            const SizedBox(height: 10),
-                          ],
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.name,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
                         ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-
-                const SizedBox(height: 14),
-
-                /// ================= RINGKASAN =================
-                _card(
-                  child: Column(
-                    children: [
-                      _row(
-                        "Sub Total",
-                        currency.format(transaksi.subtotal ?? 0),
                       ),
-                      _row(
-                        "Total Diskon (Promo)",
-                        currency.format(totalDiskon),
+                      const SizedBox(height: 4),
+                      Text(
+                        _itemSubtitle(item),
+                        style: theme.textTheme.bodySmall,
                       ),
-
-                      _row(
-                        "PPN (${transaksi.taxPercent ?? 0}%)",
-                        currency.format(transaksi.taxAmount ?? 0),
-                      ),
-                      const Divider(color: Colors.redAccent),
-                      _row(
-                        "GRAND TOTAL",
-                        currency.format(transaksi.total ?? 0),
-                        bold: true,
+                      const SizedBox(height: 6),
+                      Text(
+                        currency.format(itemTotal),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 14),
+                );
+              }).toList(),
+            ),
+          ),
 
-                /// ================= TUNAI & KEMBALIAN =================
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF3A1414),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.redAccent),
-                  ),
-                  child: Column(
-                    children: [
-                      _row(
-                        "Tunai Diterima",
-                        currency.format(transaksi.receivedAmount),
-                        light: true,
-                      ),
-                      _row(
-                        "Kembalian",
-                        currency.format(transaksi.change ?? 0),
-                        light: true,
-                      ),
-                    ],
-                  ),
-                ),
+          const SizedBox(height: 14),
 
-                const SizedBox(height: 80),
+          _card(
+            theme,
+            child: Column(
+              children: [
+                _row(theme, "Sub Total",
+                    currency.format(transaksi.subtotal ?? 0)),
+                _row(theme, "Total Diskon",
+                    currency.format(totalDiskon)),
+                _row(
+                  theme,
+                  "PPN (${transaksi.taxPercent ?? 0}%)",
+                  currency.format(transaksi.taxAmount ?? 0),
+                ),
+                Divider(color: theme.dividerColor),
+                _row(
+                  theme,
+                  "GRAND TOTAL",
+                  currency.format(transaksi.total ?? 0),
+                  bold: true,
+                ),
               ],
             ),
           ),
 
+          const SizedBox(height: 14),
+
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.error.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.colorScheme.error),
+            ),
+            child: Column(
+              children: [
+                _row(
+                  theme,
+                  "Tunai Diterima",
+                  currency.format(transaksi.receivedAmount),
+                ),
+                _row(
+                  theme,
+                  "Kembalian",
+                  currency.format(transaksi.change ?? 0),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 40),
         ],
       ),
     );
   }
 
-  /// ================= ITEM SUBTITLE =================
-  String _itemSubtitle(item, NumberFormat currency) {
-    if (item.discountType == 'buyxgety' && item.notes != null) {
-      final parts = item.notes!.split('+');
-      if (parts.length == 2) {
-        return "${item.quantity} x ${currency.format(item.price)} (Buy${parts[0]}-Get${parts[1]})";
-      }
-    }
-    if (item.discountType == 'percentage' && item.discountValue != null) {
-      return "${item.quantity} x ${currency.format(item.price)} (${item.discountValue!.toInt()}%)";
-    }
-    return "${item.quantity} x ${currency.format(item.price)}";
-  }
-
-  /// ================= UI HELPERS =================
-  Widget _infoCard(String title, String value) {
+  Widget _infoCard(ThemeData theme, String title, String value) {
     return _card(
+      theme,
       title: title,
       child: Text(
         value,
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
-        ),
+        style: theme.textTheme.bodyMedium
+            ?.copyWith(fontWeight: FontWeight.bold),
       ),
     );
   }
 
-  Widget _card({String? title, required Widget child}) {
+  Widget _card(
+    ThemeData theme, {
+    String? title,
+    required Widget child,
+  }) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1C1C1C), Color(0xFF101010)],
-        ),
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -248,7 +212,7 @@ class DetailTransaksiPage extends ConsumerWidget {
           if (title != null) ...[
             Text(
               title,
-              style: const TextStyle(color: Colors.white38, fontSize: 12),
+              style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
           ],
@@ -259,10 +223,10 @@ class DetailTransaksiPage extends ConsumerWidget {
   }
 
   Widget _row(
+    ThemeData theme,
     String label,
     String value, {
     bool bold = false,
-    bool light = false,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -271,42 +235,18 @@ class DetailTransaksiPage extends ConsumerWidget {
           Expanded(
             child: Text(
               label,
-              style: TextStyle(
-                color: light ? Colors.white : Colors.white70,
+              style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: bold ? FontWeight.bold : FontWeight.normal,
               ),
             ),
           ),
           Text(
             value,
-            style: TextStyle(
-              color: Colors.white,
+            style: theme.textTheme.bodyMedium?.copyWith(
               fontWeight: bold ? FontWeight.bold : FontWeight.normal,
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _actionButton({
-    required Color color,
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return SizedBox(
-      height: 44,
-      child: ElevatedButton.icon(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-        onPressed: onTap,
-        icon: Icon(icon, size: 18),
-        label: Text(label),
       ),
     );
   }

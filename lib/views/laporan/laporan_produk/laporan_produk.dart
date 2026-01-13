@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../viewmodels/laporan_viewmodel.dart';
 import '../../../models/laporan_model.dart';
 
-import 'widgets/filter_waktu.dart';
+import '../widgets/filter_waktu.dart';
 import 'widgets/export.dart';
 import 'widgets/card_total.dart';
 import 'widgets/card_produk.dart';
@@ -21,53 +21,89 @@ class LaporanProdukScreen extends ConsumerStatefulWidget {
 }
 
 class _LaporanProdukScreenState extends ConsumerState<LaporanProdukScreen> {
+  /// ===============================
+  /// STATE
+  /// ===============================
   bool _hasFetched = false;
+  FilterRange _activeFilter = FilterRange.today;
 
-  /// ================= SHIMMER =================
-  Widget shimmerBox({double height = 70}) {
-    return Shimmer.fromColors(
-      baseColor: const Color(0xFF1E1E1E),
-      highlightColor: const Color(0xFF2A2A2A),
-      child: Container(
-        height: height,
-        decoration: BoxDecoration(
-          color: Colors.grey,
-          borderRadius: BorderRadius.circular(16),
-        ),
+  /// cache → supaya UI tidak kedip
+  ReportProduct? _cachedProduct;
+
+  /// ===============================
+  /// SHIMMER (FIRST LOAD ONLY)
+  /// ===============================
+Widget shimmerBox(BuildContext context, {double height = 70}) {
+  final theme = Theme.of(context);
+  final isDark = theme.brightness == Brightness.dark;
+
+  return Shimmer.fromColors(
+    baseColor: isDark
+        ? theme.cardColor
+        : theme.dividerColor.withOpacity(0.35),
+    highlightColor: isDark
+        ? theme.cardColor.withOpacity(0.6)
+        : theme.dividerColor.withOpacity(0.55),
+    child: Container(
+      height: height,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(16),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  /// ================= RANGE FILTER =================
-  DateTimeRange _getRangeFromFilter(int index) {
+
+
+  /// ===============================
+  /// FILTER → RANGE
+  /// ===============================
+  DateTimeRange _resolveRange(FilterRange filter) {
     final now = DateTime.now();
 
-    switch (index) {
-      case 0: // Hari ini
-        return DateTimeRange(start: now, end: now);
-      case 1: // 7 hari
+    switch (filter) {
+      case FilterRange.today:
+        return DateTimeRange(
+          start: DateTime(now.year, now.month, now.day),
+          end: DateTime(now.year, now.month, now.day, 23, 59, 59),
+        );
+
+      case FilterRange.last7Days:
         return DateTimeRange(
           start: now.subtract(const Duration(days: 6)),
           end: now,
         );
-      case 2: // 30 hari
+
+      case FilterRange.last30Days:
         return DateTimeRange(
           start: now.subtract(const Duration(days: 29)),
           end: now,
         );
-      case 3: // 1 tahun
+
+      case FilterRange.oneYear:
         return DateTimeRange(
           start: DateTime(now.year - 1, now.month, now.day),
           end: now,
         );
-      case 4: // Semua data
-      default:
-        return DateTimeRange(start: DateTime(2000), end: now);
+
+      case FilterRange.all:
+        return DateTimeRange(
+          start: DateTime(2000),
+          end: now,
+        );
     }
   }
 
-  /// ================= FETCH BY FILTER =================
-  Future<void> _fetchByFilter(int index) async {
+  /// ===============================
+  /// FETCH DATA
+  /// ===============================
+  Future<void> _fetchByFilter(FilterRange filter) async {
+    if (_activeFilter == filter && _hasFetched) return;
+
+    _activeFilter = filter;
+
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
     final storeId = prefs.getInt('store_id');
@@ -77,45 +113,35 @@ class _LaporanProdukScreenState extends ConsumerState<LaporanProdukScreen> {
       return;
     }
 
-    final range = _getRangeFromFilter(index);
+    final range = _resolveRange(filter);
 
-    await ref
-        .read(laporanViewModelProvider.notifier)
-        .fetchProductReport(
+    await ref.read(laporanViewModelProvider.notifier).fetchProductReport(
           storeId: storeId,
           token: token,
           start: range.start,
           end: range.end,
         );
+
+    _hasFetched = true;
   }
 
   @override
   void initState() {
     super.initState();
-
-    /// 🔥 FETCH AWAL
-    Future.microtask(() async {
-      if (_hasFetched) return;
-      _hasFetched = true;
-
-      await _fetchByFilter(4); // default = Semua data
-    });
+    Future.microtask(() => _fetchByFilter(_activeFilter));
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(laporanViewModelProvider);
-    final product = state.productReport;
-    final isLoading = state.isLoading && product == null;
 
-    if (!isLoading && product == null) {
-      return const Center(
-        child: Text(
-          'Data produk belum tersedia',
-          style: TextStyle(color: Colors.white54),
-        ),
-      );
+    /// update cache kalau ada data baru
+    if (state.productReport != null) {
+      _cachedProduct = state.productReport;
     }
+
+    final product = _cachedProduct;
+    final isFirstLoading = !_hasFetched && product == null;
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -123,100 +149,84 @@ class _LaporanProdukScreenState extends ConsumerState<LaporanProdukScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           /// ================= FILTER =================
-          isLoading
-              ? shimmerBox(height: 36)
+          isFirstLoading
+              ? shimmerBox(context, height: 36)
               : FilterWaktu(
-                  onChanged: (index) {
-                    _fetchByFilter(index); // 🔥 FILTER JALAN
-                  },
+                  active: _activeFilter,
+                  onChanged: (v) => _fetchByFilter(v),
                 ),
+
           const SizedBox(height: 16),
 
           /// ================= EXPORT =================
-          isLoading ? shimmerBox(height: 44) : const ExportProdukBar(),
+          isFirstLoading ? shimmerBox(context, height: 44) : const ExportProdukBar(),
+
           const SizedBox(height: 16),
 
           /// ================= TOTAL CARD =================
           GridView(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            padding: EdgeInsets.zero,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
               childAspectRatio: 2.3,
             ),
-            children: [
-              isLoading
-                  ? shimmerBox()
-                  : CardTotal(
+            children: product == null
+                ? List.generate(4, (_) => shimmerBox(context))
+                : [
+                    CardTotal(
                       icon: Icons.inventory_2,
                       iconBgColor: const Color(0xFFE53935),
-                      value: product!.totalProducts.toString(),
+                      value: product.totalProducts.toString(),
                       label: 'Total Produk',
                     ),
-              isLoading
-                  ? shimmerBox()
-                  : CardTotal(
+                    CardTotal(
                       icon: Icons.shopping_cart,
                       iconBgColor: const Color(0xFF1F6E43),
-                      value: product!.totalSold.toString(),
+                      value: product.totalSold.toString(),
                       label: 'Produk Terjual',
                     ),
-              isLoading
-                  ? shimmerBox()
-                  : CardTotal(
+                    CardTotal(
                       icon: Icons.warning_amber_rounded,
                       iconBgColor: const Color(0xFFF9A825),
-                      value: product!.stokMenipis
+                      value: product.stokMenipis
                           .where((e) => e.remaining > 0)
                           .length
                           .toString(),
                       label: 'Stok Menipis',
                     ),
-
-              isLoading
-                  ? shimmerBox()
-                  : CardTotal(
+                    CardTotal(
                       icon: Icons.cancel,
                       iconBgColor: const Color(0xFFD32F2F),
-                      value: product!.stokHabis.toString(),
+                      value: product.stokHabis.toString(),
                       label: 'Stok Habis',
                     ),
-            ],
+                  ],
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
 
-          /// ================= PRODUK CARD =================
-          GridView(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: EdgeInsets.zero,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.25,
-            ),
-            children: [
-              isLoading
-                  ? shimmerBox(height: 160)
-                  : CardProduk(
-                      title: '10 Produk Teratas',
-                      titleIcon: Icons.star_border,
-                      items: mapTopProductsToProdukItem(product!.topProducts),
-                    ),
-              isLoading
-                  ? shimmerBox(height: 160)
-                  : CardProduk(
-                      title: 'Stok Menipis',
-                      titleIcon: Icons.warning_amber_rounded,
-                      items: mapLowStockToProdukItem(product!.stokMenipis),
-                    ),
-            ],
-          ),
+          /// ================= TOP PRODUCTS =================
+          product == null
+              ? shimmerBox(context, height: 160)
+              : CardProduk(
+                  title: '10 Produk Teratas',
+                  titleIcon: Icons.star_border,
+                  items: mapTopProductsToProdukItem(product.topProducts),
+                ),
+
+          const SizedBox(height: 16),
+
+          /// ================= LOW STOCK =================
+          product == null
+              ? shimmerBox(context, height: 160)
+              : CardProduk(
+                  title: 'Stok Menipis',
+                  titleIcon: Icons.warning_amber_rounded,
+                  items: mapLowStockToProdukItem(product.stokMenipis),
+                ),
 
           const SizedBox(height: 24),
         ],
@@ -226,7 +236,6 @@ class _LaporanProdukScreenState extends ConsumerState<LaporanProdukScreen> {
 }
 
 /// ================= MAPPER =================
-
 List<ProdukItem> mapTopProductsToProdukItem(List<TopProduct> list) {
   return list.map((e) {
     return ProdukItem(
@@ -240,13 +249,13 @@ List<ProdukItem> mapTopProductsToProdukItem(List<TopProduct> list) {
 
 List<ProdukItem> mapLowStockToProdukItem(List<LowStockProduct> list) {
   return list
-      .where((e) => e.remaining > 0) // 🔥 BUANG STOK 0
+      .where((e) => e.remaining > 0)
       .map((e) {
         return ProdukItem(
           name: e.name,
           stock: e.remaining,
           minStock: 10,
-          isCritical: e.remaining <= 10, // sekarang AMAN
+          isCritical: e.remaining <= 10,
         );
       })
       .toList();

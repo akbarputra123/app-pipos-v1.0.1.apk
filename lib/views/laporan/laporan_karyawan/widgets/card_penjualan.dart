@@ -8,7 +8,10 @@ import '../../../../models/laporan_model.dart';
 class CardPenjualanSection extends StatelessWidget {
   final List<CashierPerformance> cashiers;
 
-  const CardPenjualanSection({super.key, required this.cashiers});
+  const CardPenjualanSection({
+    super.key,
+    required this.cashiers,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +23,7 @@ class CardPenjualanSection extends StatelessWidget {
         crossAxisCount: 2,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        childAspectRatio: 0.85, // 🔒 TETAP
+        childAspectRatio: 0.85,
       ),
       children: [
         _PerformaKaryawanCard(cashiers: cashiers),
@@ -48,12 +51,12 @@ class _PerformaKaryawanCard extends StatelessWidget {
         final c = entry.value;
 
         return _ItemTile(
-          avatarText: '${index + 1}', // 🏅 ranking
+          avatarText: '${index + 1}',
           avatarColor: index == 0
               ? const Color(0xFFF9A825)
               : index == 1
-              ? Colors.grey
-              : Colors.redAccent,
+                  ? Colors.grey
+                  : Colors.redAccent,
           name: c.name,
           role: c.role,
           value: c.totalTransaksi.toString(),
@@ -88,17 +91,17 @@ class _PenjualanTerbanyakCard extends StatelessWidget {
         final c = entry.value;
 
         return _ItemTile(
-          avatarText: '${index + 1}', // 🏅 ranking
+          avatarText: '${index + 1}',
           avatarColor: index == 0
               ? const Color(0xFFF9A825)
               : index == 1
-              ? Colors.grey
-              : Colors.blueGrey,
+                  ? Colors.grey
+                  : Colors.blueGrey,
           name: c.name,
           role: c.role,
           value: rupiah.format(c.totalPenjualan),
           valueLabel: '${c.totalTransaksi} transaksi',
-          valueColor: Colors.redAccent,
+          valueColor: Theme.of(context).colorScheme.primary,
         );
       }).toList(),
     );
@@ -106,7 +109,7 @@ class _PenjualanTerbanyakCard extends StatelessWidget {
 }
 
 /// =======================================================
-/// BASE CARD
+/// BASE CARD (THEME AWARE)
 /// =======================================================
 class _BaseCard extends StatelessWidget {
   final IconData icon;
@@ -121,14 +124,18 @@ class _BaseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF151515),
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: theme.dividerColor),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.45),
+            color: theme.brightness == Brightness.dark
+                ? Colors.black.withOpacity(0.45)
+                : Colors.black.withOpacity(0.08),
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
@@ -142,17 +149,16 @@ class _BaseCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
             child: Row(
               children: [
-                Icon(icon, size: 14, color: Colors.redAccent),
+                Icon(icon, size: 14, color: theme.colorScheme.primary),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: theme.textTheme.bodySmall?.copyWith(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white,
                     ),
                   ),
                 ),
@@ -160,7 +166,7 @@ class _BaseCard extends StatelessWidget {
             ),
           ),
 
-          Divider(height: 1, color: Colors.white.withOpacity(0.06)),
+          Divider(height: 1, color: theme.dividerColor),
 
           Expanded(
             child: Padding(
@@ -178,7 +184,7 @@ class _BaseCard extends StatelessWidget {
 }
 
 /// =======================================================
-/// ITEM TILE (COMPACT & AMAN)
+/// ITEM TILE (THEME SAFE)
 /// =======================================================
 class _ItemTile extends StatelessWidget {
   final String avatarText;
@@ -201,17 +207,20 @@ class _ItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: const Color(0xFF1C1C1C),
+          color: theme.cardColor.withOpacity(0.9),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withOpacity(0.05)),
+          border: Border.all(color: theme.dividerColor),
         ),
         child: Row(
           children: [
+            /// AVATAR
             Container(
               width: 26,
               height: 26,
@@ -222,14 +231,15 @@ class _ItemTile extends StatelessWidget {
               ),
               child: Text(
                 avatarText,
-                style: const TextStyle(
-                  fontSize: 11,
+                style: theme.textTheme.labelSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
               ),
             ),
             const SizedBox(width: 8),
+
+            /// INFO
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -238,30 +248,31 @@ class _ItemTile extends StatelessWidget {
                     name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11,
+                    style: theme.textTheme.bodySmall?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: Colors.white,
                     ),
                   ),
                   Text(
                     role,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
+                    style: theme.textTheme.labelSmall?.copyWith(
                       fontSize: 9.5,
-                      color: Colors.white.withOpacity(0.55),
+                      color: theme.textTheme.bodySmall?.color
+                          ?.withOpacity(0.55),
                     ),
                   ),
                 ],
               ),
             ),
+
+            /// VALUE
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
                   value,
-                  style: TextStyle(
+                  style: theme.textTheme.bodySmall?.copyWith(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w600,
                     color: valueColor,
@@ -269,9 +280,10 @@ class _ItemTile extends StatelessWidget {
                 ),
                 Text(
                   valueLabel,
-                  style: TextStyle(
+                  style: theme.textTheme.labelSmall?.copyWith(
                     fontSize: 9,
-                    color: Colors.white.withOpacity(0.45),
+                    color: theme.textTheme.bodySmall?.color
+                        ?.withOpacity(0.45),
                   ),
                 ),
               ],
